@@ -6,6 +6,10 @@ pub const Token = struct {
     tag: Tag,
     loc: Location,
 
+    pub const List = std.MultiArrayList(Token);
+    pub const Slice = List.Slice;
+    pub const Index = u32;
+
     const Location = struct {
         start: usize,
         end: usize,
