@@ -47,7 +47,26 @@ fn parseStatement(parser: *Parser) !Node.Index {
 }
 
 fn parseExprOrStmt(parser: *Parser) !Node.Index {
-    return try parser.parseSimpleExpr();
+    return try parser.parseBinaryExpr();
+}
+
+fn parseBinaryExpr(parser: *Parser) !Node.Index {
+    var node = try parser.parseSimpleExpr();
+
+    while (parser.tok_index < parser.tokens.len - 1) {
+        const operator = parser.tok_index;
+        parser.tok_index += 1;
+        const rhs = try parser.parseSimpleExpr();
+
+        node = try parser.addNode(.{
+            .tag = .binary_expression,
+            .main_token = operator,
+            .lhs = node,
+            .rhs = rhs,
+        });
+    }
+
+    return node;
 }
 
 fn parseSimpleExpr(parser: *Parser) !Node.Index {

@@ -38,13 +38,14 @@ pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
 pub const Node = struct {
     tag: Tag,
     main_token: Token.Index,
-    lhs: Token.Index = Invalid,
-    rhs: Token.Index = Invalid,
+    lhs: Token.Index = invalid,
+    rhs: Token.Index = invalid,
 
     pub const List = std.MultiArrayList(Node);
     pub const Slice = List.Slice;
     pub const Index = u32;
-    pub const Invalid = std.math.maxInt(Index);
+
+    pub const invalid = std.math.maxInt(Index);
 
     pub const Tag = enum {
         chunk,
@@ -56,7 +57,7 @@ pub const Node = struct {
 };
 
 fn printNode(tree: *Ast, writer: anytype, node_idx: Node.Index, indent: u8) !void {
-    if (node_idx == Node.Invalid)
+    if (node_idx == Node.invalid)
         return;
 
     const node = tree.nodes.get(node_idx);
