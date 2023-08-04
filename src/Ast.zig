@@ -116,3 +116,27 @@ test "assignment" {
         \\hello = -12 * 54 + 25 % 4
     );
 }
+
+test "local assignment" {
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier
+        \\
+    ,
+        \\local ident
+    );
+
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier
+        \\    binary_expression
+        \\      literal
+        \\      unary_expression
+        \\        literal
+        \\
+    ,
+        \\local ident = 23 * -34
+    );
+}

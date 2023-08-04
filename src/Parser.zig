@@ -35,16 +35,41 @@ fn parseChunk(parser: *Parser) !Node.Index {
 }
 
 fn parseStatement(parser: *Parser) !Node.Index {
-    switch (parser.tokens.items(.tag)[parser.tok_index]) {
+    const tags = parser.tokens.items(.tag);
+    switch (tags[parser.tok_index]) {
         .keyword_if,
         .keyword_do,
         .keyword_while,
         .keyword_for,
-        .keyword_local,
         => unreachable,
+        .keyword_local => {
+            parser.tok_index += 1;
+            if (tags[parser.tok_index] == .keyword_function)
+                unreachable;
+
+            return try parser.parseLocalStmt();
+        },
         else => return try parser.parseExprOrStmt(),
     }
     unreachable;
+}
+
+fn parseLocalStmt(parser: *Parser) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+
+    const local_token = parser.tok_index - 1;
+    const ident = try parser.expectIdent();
+    const value = if (tags[parser.tok_index] == .equal) blk: {
+        parser.tok_index += 1;
+        break :blk try parser.parseBinaryExpr(0);
+    } else Node.invalid;
+
+    return try parser.addNode(.{
+        .tag = .assignment,
+        .main_token = local_token,
+        .lhs = ident,
+        .rhs = value,
+    });
 }
 
 fn parseExprOrStmt(parser: *Parser) !Node.Index {
@@ -73,13 +98,7 @@ fn parsePrimaryExpr(parser: *Parser) !Node.Index {
 fn parsePrefixExpr(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
     switch (tags[parser.tok_index]) {
-        .ident => {
-            parser.tok_index += 1;
-            return try parser.addNode(.{
-                .tag = .identifier,
-                .main_token = parser.tok_index - 1,
-            });
-        },
+        .ident => return try parser.parseIdent(),
         else => unreachable,
     }
     unreachable;
@@ -175,4 +194,21 @@ fn parseSimpleExpr(parser: *Parser) !Node.Index {
         else => unreachable,
     }
     unreachable;
+}
+
+fn parseIdent(parser: *Parser) !Node.Index {
+    parser.tok_index += 1;
+    return parser.addNode(.{
+        .tag = .identifier,
+        .main_token = parser.tok_index - 1,
+    });
+}
+
+fn expectIdent(parser: *Parser) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+    if (tags[parser.tok_index] != .ident) {
+        // error
+    }
+
+    return try parser.parseIdent();
 }
