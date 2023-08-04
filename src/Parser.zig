@@ -28,7 +28,8 @@ fn parseChunk(parser: *Parser) !Node.Index {
         .main_token = 0,
     });
 
-    parser.nodes.items(.lhs)[chunk] = try parser.parseStatement();
+    const stmt = try parser.parseStatement();
+    parser.nodes.items(.lhs)[chunk] = stmt;
 
     return chunk;
 }
@@ -47,7 +48,41 @@ fn parseStatement(parser: *Parser) !Node.Index {
 }
 
 fn parseExprOrStmt(parser: *Parser) !Node.Index {
-    return try parser.parseBinaryExpr(0);
+    const tags = parser.tokens.items(.tag);
+
+    const main_token = parser.tok_index;
+    var expr = try parser.parsePrimaryExpr();
+
+    if (tags[parser.tok_index] == .equal) {
+        parser.tok_index += 1;
+        expr = try parser.addNode(.{
+            .tag = .assignment,
+            .main_token = main_token,
+            .lhs = expr,
+            .rhs = try parser.parseBinaryExpr(0), // TODO: should be explist
+        });
+    }
+
+    return expr;
+}
+
+fn parsePrimaryExpr(parser: *Parser) !Node.Index {
+    return try parser.parsePrefixExpr();
+}
+
+fn parsePrefixExpr(parser: *Parser) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+    switch (tags[parser.tok_index]) {
+        .ident => {
+            parser.tok_index += 1;
+            return try parser.addNode(.{
+                .tag = .identifier,
+                .main_token = parser.tok_index - 1,
+            });
+        },
+        else => unreachable,
+    }
+    unreachable;
 }
 
 const OperatorInfo = struct {

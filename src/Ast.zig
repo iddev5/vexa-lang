@@ -51,6 +51,7 @@ pub const Node = struct {
         chunk,
         assignment,
         literal,
+        identifier,
         unary_expression,
         binary_expression,
     };
