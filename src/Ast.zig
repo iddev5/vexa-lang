@@ -5,9 +5,15 @@ const Parser = @import("Parser.zig");
 const Tokenizer = @import("Tokenizer.zig");
 const Token = Tokenizer.Token;
 
+allocator: std.mem.Allocator,
 source: [:0]const u8,
 tokens: Token.Slice,
 nodes: Node.Slice,
+
+pub fn deinit(ast: *Ast) void {
+    ast.tokens.deinit(ast.allocator);
+    ast.nodes.deinit(ast.allocator);
+}
 
 pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
     var tokens: Token.List = .{};
@@ -29,6 +35,7 @@ pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
     try parser.parse();
 
     return .{
+        .allocator = allocator,
         .source = source,
         .tokens = tokens.toOwnedSlice(),
         .nodes = parser.nodes.toOwnedSlice(),
@@ -57,17 +64,55 @@ pub const Node = struct {
     };
 };
 
-fn printNode(tree: *Ast, writer: anytype, node_idx: Node.Index, indent: u8) !void {
+pub fn printNode(tree: *Ast, writer: anytype, node_idx: Node.Index, indent: u8) !void {
     if (node_idx == Node.invalid)
         return;
 
     const node = tree.nodes.get(node_idx);
-    _ = try writer.writeByteNTimes(' ', indent * 4);
-    try writer.print("- {s}\n", .{@tagName(node.tag)});
+    _ = try writer.writeByteNTimes(' ', indent * 2);
+    try writer.print("{s}\n", .{@tagName(node.tag)});
     try tree.printNode(writer, node.lhs, indent + 1);
     try tree.printNode(writer, node.rhs, indent + 1);
 }
 
-pub fn printAst(tree: *Ast, writer: anytype) !void {
+pub fn printTree(tree: *Ast, writer: anytype) !void {
     try tree.printNode(writer, 0, 0);
+}
+
+fn testParser(expected_ast_dump: []const u8, source: [:0]const u8) !void {
+    var tree = try Ast.parse(std.testing.allocator, source);
+    defer tree.deinit();
+    var buf: [1024]u8 = undefined;
+    var stream = std.io.fixedBufferStream(buf[0..]);
+    try tree.printTree(stream.writer());
+    try std.testing.expectEqualStrings(expected_ast_dump, stream.getWritten());
+}
+
+test "assignment" {
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier
+        \\    literal
+        \\
+    ,
+        \\hello = 12
+    );
+
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier
+        \\    binary_expression
+        \\      binary_expression
+        \\        unary_expression
+        \\          literal
+        \\        literal
+        \\      binary_expression
+        \\        literal
+        \\        literal
+        \\
+    ,
+        \\hello = -12 * 54 + 25 % 4
+    );
 }

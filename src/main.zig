@@ -6,9 +6,12 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
 
     var tree = try Ast.parse(allocator, "hello = -12 - #12 * -12");
-    try tree.printAst(stdout);
+    defer tree.deinit();
+
+    try tree.printTree(stdout);
 }
 
 comptime {
     _ = @import("Tokenizer.zig");
+    _ = @import("Ast.zig");
 }
