@@ -5,7 +5,7 @@ pub fn main() !void {
     const allocator = std.heap.page_allocator;
     const stdout = std.io.getStdOut().writer();
 
-    var tree = try Ast.parse(allocator, "12 + 3 * 4");
+    var tree = try Ast.parse(allocator, "-12 * 15 + 2");
     try tree.printAst(stdout);
 }
 

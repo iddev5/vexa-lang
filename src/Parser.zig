@@ -47,26 +47,84 @@ fn parseStatement(parser: *Parser) !Node.Index {
 }
 
 fn parseExprOrStmt(parser: *Parser) !Node.Index {
-    return try parser.parseBinaryExpr();
+    return try parser.parseBinaryExpr(0);
 }
 
-fn parseBinaryExpr(parser: *Parser) !Node.Index {
-    var node = try parser.parseSimpleExpr();
+const OperatorInfo = struct {
+    prec: i8,
+    assoc: Assoc = .left,
 
+    const Assoc = enum { left, right };
+};
+
+const operator_table = std.enums.directEnumArrayDefault(Token.Tag, OperatorInfo, .{ .prec = -1 }, 0, .{
+    .keyword_or = .{ .prec = 10 },
+
+    .keyword_and = .{ .prec = 20 },
+
+    .angle_bracket_left = .{ .prec = 30 },
+    .angle_bracket_right = .{ .prec = 30 },
+    .angle_bracket_left_equal = .{ .prec = 30 },
+    .angle_bracket_right_equal = .{ .prec = 30 },
+    .tilde_equal = .{ .prec = 30 },
+    .equal_equal = .{ .prec = 30 },
+
+    .dot_dot = .{ .prec = 40, .assoc = .right },
+
+    .plus = .{ .prec = 50 },
+    .minus = .{ .prec = 50 },
+
+    .multiply = .{ .prec = 60 },
+    .divide = .{ .prec = 60 },
+    .mod = .{ .prec = 60 },
+
+    // TODO: exponent has higher prec than unaries
+    .exponent = .{ .prec = 70, .assoc = .right },
+});
+
+fn parseBinaryExpr(parser: *Parser, min_precedence: i32) !Node.Index {
+    var node = try parser.parseUnaryExpr();
+
+    // TODO: associativity
     while (parser.tok_index < parser.tokens.len - 1) {
-        const operator = parser.tok_index;
+        const operator_token = parser.tok_index;
+        const operator = parser.tokens.items(.tag)[operator_token];
+        const info = operator_table[@as(usize, @intCast(@intFromEnum(operator)))];
+
+        if (info.prec < min_precedence) {
+            break;
+        }
+
         parser.tok_index += 1;
-        const rhs = try parser.parseSimpleExpr();
+        const rhs = try parser.parseBinaryExpr(info.prec + 1);
+        if (rhs == Node.invalid) {
+            // error
+        }
 
         node = try parser.addNode(.{
             .tag = .binary_expression,
-            .main_token = operator,
+            .main_token = operator_token,
             .lhs = node,
             .rhs = rhs,
         });
     }
 
     return node;
+}
+
+fn parseUnaryExpr(parser: *Parser) !Node.Index {
+    switch (parser.tokens.items(.tag)[parser.tok_index]) {
+        .minus, .hash, .keyword_not => {},
+        else => return parser.parseSimpleExpr(),
+    }
+
+    parser.tok_index += 1;
+
+    return parser.addNode(.{
+        .tag = .unary_expression,
+        .main_token = parser.tok_index,
+        .lhs = try parser.parseUnaryExpr(),
+    });
 }
 
 fn parseSimpleExpr(parser: *Parser) !Node.Index {

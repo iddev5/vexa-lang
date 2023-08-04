@@ -10,12 +10,12 @@ pub const Token = struct {
     pub const Slice = List.Slice;
     pub const Index = u32;
 
-    const Location = struct {
+    pub const Location = struct {
         start: usize,
         end: usize,
     };
 
-    const Tag = enum {
+    pub const Tag = enum {
         eof,
         invalid,
         ident,
@@ -34,7 +34,7 @@ pub const Token = struct {
         multiply,
         divide,
         mod,
-        xor,
+        exponent,
         hash,
         equal,
         equal_equal,
@@ -226,7 +226,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
                     break;
                 },
                 '^' => {
-                    result.tag = .xor;
+                    result.tag = .exponent;
                     index += 1;
                     break;
                 },
@@ -405,7 +405,7 @@ test "symbols" {
             .multiply,
             .divide,
             .mod,
-            .xor,
+            .exponent,
             .hash,
             .equal,
             .equal_equal,
