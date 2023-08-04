@@ -4,11 +4,13 @@ const std = @import("std");
 const Parser = @import("Parser.zig");
 const Tokenizer = @import("Tokenizer.zig");
 const Token = Tokenizer.Token;
+const Diagnostics = @import("Diagnostics.zig");
 
 allocator: std.mem.Allocator,
 source: [:0]const u8,
 tokens: Token.Slice,
 nodes: Node.Slice,
+diag: Diagnostics,
 
 pub fn deinit(ast: *Ast) void {
     ast.tokens.deinit(ast.allocator);
@@ -39,6 +41,7 @@ pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
         .source = source,
         .tokens = tokens.toOwnedSlice(),
         .nodes = parser.nodes.toOwnedSlice(),
+        .diag = parser.diag,
     };
 }
 

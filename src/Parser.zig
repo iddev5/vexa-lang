@@ -5,12 +5,31 @@ const Tokenizer = @import("Tokenizer.zig");
 const Token = Tokenizer.Token;
 const Ast = @import("Ast.zig");
 const Node = Ast.Node;
+const Diagnostics = @import("Diagnostics.zig");
 
 allocator: std.mem.Allocator,
 source: [:0]const u8,
 tokens: Token.List,
+diag: Diagnostics = undefined,
 nodes: Node.List = .{},
 tok_index: Token.Index = 0,
+
+fn emitErrorLoc(
+    parser: *Parser,
+    loc: Token.Location,
+    comptime tag: Diagnostics.ErrorTag,
+    args: anytype,
+) !void {
+    parser.diag = try Diagnostics.emitError(parser.allocator, loc, tag, args);
+}
+
+fn emitError(
+    parser: *Parser,
+    comptime tag: Diagnostics.ErrorTag,
+    args: anytype,
+) !void {
+    try parser.emitErrorLoc(parser.tokens.items(.loc)[parser.tok_index], tag, args);
+}
 
 pub fn parse(parser: *Parser) !void {
     _ = try parser.parseChunk();
@@ -152,7 +171,8 @@ fn parseBinaryExpr(parser: *Parser, min_precedence: i32) !Node.Index {
         parser.tok_index += 1;
         const rhs = try parser.parseBinaryExpr(info.prec + 1);
         if (rhs == Node.invalid) {
-            // error
+            try parser.emitError(.expected_token, .{ "expression", "eof" });
+            return error.ParsingFailed;
         }
 
         node = try parser.addNode(.{
@@ -191,7 +211,7 @@ fn parseSimpleExpr(parser: *Parser) !Node.Index {
             });
         },
         .keyword_function => unreachable,
-        else => unreachable,
+        else => return Node.invalid,
     }
     unreachable;
 }
@@ -207,7 +227,8 @@ fn parseIdent(parser: *Parser) !Node.Index {
 fn expectIdent(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
     if (tags[parser.tok_index] != .ident) {
-        // error
+        try parser.emitError(.expected_token, .{ "identifier", "null" });
+        return error.ParsingFailed;
     }
 
     return try parser.parseIdent();
