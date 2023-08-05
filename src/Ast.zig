@@ -65,11 +65,13 @@ pub const Node = struct {
         assignment,
         literal,
         identifier,
+        identifier_list,
         return_statement,
         break_statement,
         do_statement,
         if_statement,
         cond_value,
+        expression_list,
         unary_expression,
         binary_expression,
     };
@@ -84,7 +86,7 @@ pub fn printNode(tree: *Ast, writer: anytype, node_idx: Node.Index, indent: u8) 
     try writer.print("{s}\n", .{@tagName(node.tag)});
 
     switch (node.tag) {
-        .chunk => {
+        .chunk, .expression_list, .identifier_list => {
             var i = node.lhs;
             while (i < node.rhs) : (i += 1) {
                 const child = tree.extras[i];
@@ -241,6 +243,17 @@ test "return_statement" {
     ,
         \\return 12
     );
+
+    try testParser(
+        \\chunk
+        \\  return_statement
+        \\    expression_list
+        \\      literal
+        \\      identifier
+        \\
+    ,
+        \\return 12, hi
+    );
 }
 
 test "do_statement" {
@@ -329,5 +342,61 @@ test "local assignment" {
         \\
     ,
         \\local ident = 23 * -34
+    );
+}
+
+test "multi assignment" {
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier
+        \\    expression_list
+        \\      literal
+        \\      identifier
+        \\      literal
+        \\
+    ,
+        \\hello = 19, hi, true
+    );
+
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    expression_list
+        \\      identifier
+        \\      identifier
+        \\    expression_list
+        \\      literal
+        \\      identifier
+        \\      literal
+        \\
+    ,
+        \\hello, hii = 19, hi, true
+    );
+
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier
+        \\    expression_list
+        \\      literal
+        \\      literal
+        \\
+    ,
+        \\local hello = 11, true
+    );
+
+    try testParser(
+        \\chunk
+        \\  assignment
+        \\    identifier_list
+        \\      identifier
+        \\      identifier
+        \\    expression_list
+        \\      identifier
+        \\      literal
+        \\
+    ,
+        \\local hi, hello = ijk, nil
     );
 }

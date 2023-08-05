@@ -109,7 +109,7 @@ fn parseStatement(parser: *Parser) !Node.Index {
             parser.tok_index += 1;
             const chunk = try parser.parseChunk();
             try parser.expectToken(.keyword_end);
-            return parser.addNode(.{
+            return try parser.addNode(.{
                 .tag = .do_statement,
                 .main_token = 0,
                 .lhs = chunk,
@@ -180,8 +180,7 @@ fn parseRetStatement(parser: *Parser) !Node.Index {
     parser.tok_index += 1;
 
     if (tags[parser.tok_index] != .semicolon or !blockFollow(tags[parser.tok_index])) {
-        // TODO: should be explist
-        ret_val = try parser.parseBinaryExpr(0);
+        ret_val = try parser.parseExprOrList();
     }
 
     return parser.addNode(.{
@@ -195,10 +194,10 @@ fn parseLocalStmt(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
     const local_token = parser.tok_index - 1;
-    const ident = try parser.expectIdent();
+    const ident = try parser.parseIdentOrList();
     const value = if (tags[parser.tok_index] == .equal) blk: {
         parser.tok_index += 1;
-        break :blk try parser.parseBinaryExpr(0);
+        break :blk try parser.parseExprOrList();
     } else Node.invalid;
 
     return try parser.addNode(.{
@@ -209,11 +208,36 @@ fn parseLocalStmt(parser: *Parser) !Node.Index {
     });
 }
 
+fn parseIdentOrList(parser: *Parser) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+
+    var i: u32 = 1;
+    var last_ident: Node.Index = try parser.expectIdent();
+    while (tags[parser.tok_index] == .comma) : (i += 1) {
+        parser.tok_index += 1;
+        try parser.extras.append(parser.allocator, last_ident);
+        last_ident = try parser.parseIdent();
+    }
+
+    if (i > 1) {
+        try parser.extras.append(parser.allocator, last_ident);
+
+        return parser.addNode(.{
+            .tag = .identifier_list,
+            .main_token = 0,
+            .lhs = @as(u32, @intCast(parser.extras.items.len)) - i,
+            .rhs = @intCast(parser.extras.items.len),
+        });
+    }
+
+    return last_ident;
+}
+
 fn parseExprOrStmt(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
     const main_token = parser.tok_index;
-    var expr = try parser.parsePrimaryExpr();
+    var expr = try parser.parsePrimaryOrList();
 
     if (tags[parser.tok_index] == .equal) {
         parser.tok_index += 1;
@@ -221,11 +245,52 @@ fn parseExprOrStmt(parser: *Parser) !Node.Index {
             .tag = .assignment,
             .main_token = main_token,
             .lhs = expr,
-            .rhs = try parser.parseBinaryExpr(0), // TODO: should be explist
+            .rhs = try parser.parseExprOrList(),
         });
     }
 
     return expr;
+}
+
+fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Error!Node.Index {
+    return struct {
+        fn f(parser: *Parser) !Node.Index {
+            const tags = parser.tokens.items(.tag);
+
+            var expr_list: std.ArrayListUnmanaged(Node.Index) = .{};
+            defer expr_list.deinit(parser.allocator);
+
+            const first_expr = try func(parser);
+            try expr_list.append(parser.allocator, first_expr);
+
+            var i: u32 = 1;
+            while (tags[parser.tok_index] == .comma) : (i += 1) {
+                parser.tok_index += 1;
+                const expr = try func(parser);
+                try expr_list.append(parser.allocator, expr);
+            }
+
+            if (i > 1) {
+                try parser.extras.appendSlice(parser.allocator, expr_list.items);
+
+                return parser.addNode(.{
+                    .tag = .expression_list,
+                    .main_token = 0,
+                    .lhs = @as(u32, @intCast(parser.extras.items.len)) - i,
+                    .rhs = @intCast(parser.extras.items.len),
+                });
+            }
+
+            return first_expr;
+        }
+    }.f;
+}
+
+const parsePrimaryOrList = MakeExprOrList(Parser.parsePrimaryExpr);
+const parseExprOrList = MakeExprOrList(Parser.parseExpr);
+
+fn parseExpr(parser: *Parser) !Node.Index {
+    return try parser.parseBinaryExpr(0);
 }
 
 fn parsePrimaryExpr(parser: *Parser) !Node.Index {
@@ -236,7 +301,7 @@ fn parsePrefixExpr(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
     switch (tags[parser.tok_index]) {
         .ident => return try parser.parseIdent(),
-        else => unreachable,
+        else => return Node.invalid,
     }
     unreachable;
 }
@@ -329,7 +394,7 @@ fn parseSimpleExpr(parser: *Parser) !Node.Index {
             });
         },
         .keyword_function => unreachable,
-        else => return Node.invalid,
+        else => return try parser.parsePrimaryExpr(),
     }
     unreachable;
 }
