@@ -7,13 +7,21 @@ pub fn main() !void {
 
     var tree = try Ast.parse(allocator,
         \\if true then
-        \\  local x = 12
-        \\elseif 12 then
-        \\  hoo = 34
-        \\elseif true == 35 then
-        \\  local x = 12
-        \\else
-        \\  hi = 12
+        \\  local h = 12
+        \\  hmm = 20
+        \\  an = 23
+        \\end
+        \\
+        \\if false then
+        \\  local hi = 12
+        \\  ho = 23
+        \\end
+        \\
+        \\local h = 12
+        \\local o = 12
+        \\
+        \\if 1 then
+        \\  i = 2
         \\end
     );
     defer tree.deinit();

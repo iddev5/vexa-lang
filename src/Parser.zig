@@ -12,6 +12,7 @@ source: [:0]const u8,
 tokens: Token.List,
 diag: Diagnostics = undefined,
 nodes: Node.List = .{},
+extras: std.ArrayListUnmanaged(Node.Index) = .{},
 tok_index: Token.Index = 0,
 
 pub const Error = std.mem.Allocator.Error || error{ParsingFailed};
@@ -49,10 +50,42 @@ fn parseChunk(parser: *Parser) Error!Node.Index {
         .main_token = 0,
     });
 
-    const stmt = try parser.parseStatement();
-    parser.nodes.items(.lhs)[chunk] = stmt;
+    const tags = parser.tokens.items(.tag);
+
+    // TODO: allocate less
+    var stmt_list: std.ArrayListUnmanaged(Node.Index) = .{};
+    defer stmt_list.deinit(parser.allocator);
+
+    var i: u32 = 0;
+    while (!blockFollow(tags[parser.tok_index])) : (i += 1) {
+        const stmt = try parser.parseStatement();
+        try stmt_list.append(parser.allocator, stmt);
+
+        if (tags[parser.tok_index] == .semicolon)
+            parser.tok_index += 1;
+    }
+
+    try parser.extras.appendSlice(parser.allocator, stmt_list.items);
+
+    parser.nodes.items(.lhs)[chunk] = @as(u32, @intCast(parser.extras.items.len)) - i;
+    parser.nodes.items(.rhs)[chunk] = @intCast(parser.extras.items.len);
 
     return chunk;
+}
+
+// TODO: move to lexer?
+fn blockFollow(tag: Token.Tag) bool {
+    switch (tag) {
+        .keyword_else,
+        .keyword_elseif,
+        .keyword_end,
+        .keyword_until,
+        .eof,
+        => return true,
+        else => {},
+    }
+
+    return false;
 }
 
 fn parseStatement(parser: *Parser) !Node.Index {
