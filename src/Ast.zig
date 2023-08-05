@@ -65,6 +65,9 @@ pub const Node = struct {
         assignment,
         literal,
         identifier,
+        return_statement,
+        break_statement,
+        do_statement,
         if_statement,
         cond_value,
         unary_expression,
@@ -218,6 +221,61 @@ test "if_statement" {
         \\else
         \\  local t = 45
         \\end
+    );
+}
+
+test "return_statement" {
+    try testParser(
+        \\chunk
+        \\  return_statement
+        \\
+    ,
+        \\return
+    );
+
+    try testParser(
+        \\chunk
+        \\  return_statement
+        \\    literal
+        \\
+    ,
+        \\return 12
+    );
+}
+
+test "do_statement" {
+    try testParser(
+        \\chunk
+        \\  do_statement
+        \\    chunk
+        \\      assignment
+        \\        identifier
+        \\        literal
+        \\      if_statement
+        \\        cond_value
+        \\          literal
+        \\          chunk
+        \\            assignment
+        \\              identifier
+        \\              literal
+        \\
+    ,
+        \\do
+        \\  local l = 12
+        \\  if true then
+        \\    test = false
+        \\  end
+        \\end
+    );
+}
+
+test "break_statement" {
+    try testParser(
+        \\chunk
+        \\  break_statement
+        \\
+    ,
+        \\break
     );
 }
 

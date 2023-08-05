@@ -92,10 +92,29 @@ fn parseStatement(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
     switch (tags[parser.tok_index]) {
         .keyword_if => return try parser.parseIfStatement(),
-        .keyword_do,
+        .keyword_return => return try parser.parseRetStatement(),
         .keyword_while,
         .keyword_for,
+        .keyword_repeat,
+        .keyword_function,
         => unreachable,
+        .keyword_break => {
+            parser.tok_index += 1;
+            return try parser.addNode(.{
+                .tag = .break_statement,
+                .main_token = 0,
+            });
+        },
+        .keyword_do => {
+            parser.tok_index += 1;
+            const chunk = try parser.parseChunk();
+            try parser.expectToken(.keyword_end);
+            return parser.addNode(.{
+                .tag = .do_statement,
+                .main_token = 0,
+                .lhs = chunk,
+            });
+        },
         .keyword_local => {
             parser.tok_index += 1;
             if (tags[parser.tok_index] == .keyword_function)
@@ -150,6 +169,25 @@ fn parseCondValue(parser: *Parser) !Node.Index {
         .main_token = main_token,
         .lhs = cond,
         .rhs = chunk,
+    });
+}
+
+fn parseRetStatement(parser: *Parser) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+
+    const return_tok = parser.tok_index;
+    var ret_val: Node.Index = Node.invalid;
+    parser.tok_index += 1;
+
+    if (tags[parser.tok_index] != .semicolon or !blockFollow(tags[parser.tok_index])) {
+        // TODO: should be explist
+        ret_val = try parser.parseBinaryExpr(0);
+    }
+
+    return parser.addNode(.{
+        .tag = .return_statement,
+        .main_token = return_tok,
+        .lhs = ret_val,
     });
 }
 
