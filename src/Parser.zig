@@ -14,6 +14,8 @@ diag: Diagnostics = undefined,
 nodes: Node.List = .{},
 tok_index: Token.Index = 0,
 
+pub const Error = std.mem.Allocator.Error || error{ParsingFailed};
+
 fn emitErrorLoc(
     parser: *Parser,
     loc: Token.Location,
@@ -41,7 +43,7 @@ fn addNode(parser: *Parser, node: Node) !Node.Index {
     return res;
 }
 
-fn parseChunk(parser: *Parser) !Node.Index {
+fn parseChunk(parser: *Parser) Error!Node.Index {
     var chunk = try parser.addNode(.{
         .tag = .chunk,
         .main_token = 0,
@@ -56,7 +58,7 @@ fn parseChunk(parser: *Parser) !Node.Index {
 fn parseStatement(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
     switch (tags[parser.tok_index]) {
-        .keyword_if,
+        .keyword_if => return try parser.parseIfStatement(),
         .keyword_do,
         .keyword_while,
         .keyword_for,
@@ -71,6 +73,51 @@ fn parseStatement(parser: *Parser) !Node.Index {
         else => return try parser.parseExprOrStmt(),
     }
     unreachable;
+}
+
+fn parseIfStatement(parser: *Parser) !Node.Index {
+    const if_tree = try parser.parseIfTree();
+    try parser.expectToken(.keyword_end);
+    return if_tree;
+}
+
+fn parseIfTree(parser: *Parser) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+
+    // Ignore the 'IF' or 'ELSEIF' keyword
+    parser.tok_index += 1;
+    const if_cont = try parser.parseCondValue();
+
+    const else_cont = switch (tags[parser.tok_index]) {
+        .keyword_elseif => try parser.parseIfTree(),
+        .keyword_else => blk: {
+            parser.tok_index += 1;
+            break :blk try parser.parseChunk();
+        },
+        else => Node.invalid,
+    };
+
+    return try parser.addNode(.{
+        .tag = .if_statement,
+        .main_token = undefined,
+        .lhs = if_cont,
+        .rhs = else_cont,
+    });
+}
+
+fn parseCondValue(parser: *Parser) !Node.Index {
+    const main_token = parser.tok_index - 1;
+
+    const cond = try parser.parseBinaryExpr(0); // TODO: is this correct?
+    try parser.expectToken(.keyword_then);
+    const chunk = try parser.parseChunk();
+
+    return try parser.addNode(.{
+        .tag = .cond_value,
+        .main_token = main_token,
+        .lhs = cond,
+        .rhs = chunk,
+    });
 }
 
 fn parseLocalStmt(parser: *Parser) !Node.Index {
@@ -232,4 +279,13 @@ fn expectIdent(parser: *Parser) !Node.Index {
     }
 
     return try parser.parseIdent();
+}
+
+fn expectToken(parser: *Parser, tag: Token.Tag) !void {
+    if (parser.tokens.items(.tag)[parser.tok_index] != tag) {
+        try parser.emitError(.expected_token, .{ "this", "that" });
+        return error.ParsingFailed;
+    }
+
+    parser.tok_index += 1;
 }

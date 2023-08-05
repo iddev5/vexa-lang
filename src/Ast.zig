@@ -62,6 +62,8 @@ pub const Node = struct {
         assignment,
         literal,
         identifier,
+        if_statement,
+        cond_value,
         unary_expression,
         binary_expression,
     };
@@ -89,6 +91,77 @@ fn testParser(expected_ast_dump: []const u8, source: [:0]const u8) !void {
     var stream = std.io.fixedBufferStream(buf[0..]);
     try tree.printTree(stream.writer());
     try std.testing.expectEqualStrings(expected_ast_dump, stream.getWritten());
+}
+
+test "if_statement" {
+    try testParser(
+        \\chunk
+        \\  if_statement
+        \\    cond_value
+        \\      literal
+        \\      chunk
+        \\        assignment
+        \\          identifier
+        \\          literal
+        \\
+    ,
+        \\if true then
+        \\  local h = 15
+        \\end
+    );
+
+    try testParser(
+        \\chunk
+        \\  if_statement
+        \\    cond_value
+        \\      literal
+        \\      chunk
+        \\        assignment
+        \\          identifier
+        \\          literal
+        \\    chunk
+        \\      assignment
+        \\        identifier
+        \\        literal
+        \\
+    ,
+        \\if true then
+        \\  local h = 15
+        \\else
+        \\  local t = 45
+        \\end
+    );
+
+    try testParser(
+        \\chunk
+        \\  if_statement
+        \\    cond_value
+        \\      literal
+        \\      chunk
+        \\        assignment
+        \\          identifier
+        \\          literal
+        \\    if_statement
+        \\      cond_value
+        \\        literal
+        \\        chunk
+        \\          assignment
+        \\            identifier
+        \\            literal
+        \\      chunk
+        \\        assignment
+        \\          identifier
+        \\          literal
+        \\
+    ,
+        \\if true then
+        \\  local h = 15
+        \\elseif 56 then
+        \\  i = 34
+        \\else
+        \\  local t = 45
+        \\end
+    );
 }
 
 test "assignment" {
