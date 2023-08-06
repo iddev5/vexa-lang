@@ -18,8 +18,11 @@ pub const Token = struct {
     pub const Tag = enum {
         eof,
         invalid,
+
         ident,
         num,
+        string_literal,
+
         l_paren,
         r_paren,
         l_brace,
@@ -46,7 +49,6 @@ pub const Token = struct {
         dot,
         dot_dot,
         dot_dot_dot,
-        string_literal,
 
         keyword_and,
         keyword_break,
@@ -69,6 +71,46 @@ pub const Token = struct {
         keyword_true,
         keyword_until,
         keyword_while,
+
+        pub fn symbol(tag: Tag) []const u8 {
+            return switch (tag) {
+                .eof => "EOF",
+                .invalid => "invalid bytes",
+
+                .ident => "an identifier",
+                .num => "a number",
+                .string_literal => "a string literal",
+
+                .l_paren => "(",
+                .r_paren => ")",
+                .l_brace => "{",
+                .r_brace => "}",
+                .l_bracket => "[",
+                .r_bracket => "]",
+                .semicolon => ";",
+                .colon => ":",
+                .comma => ",",
+                .plus => "+",
+                .minus => "-",
+                .multiply => "*",
+                .divide => "/",
+                .mod => "%",
+                .exponent => "^",
+                .hash => "#",
+                .equal => "=",
+                .equal_equal => "==",
+                .tilde_equal => "~=",
+                .angle_bracket_left => "<",
+                .angle_bracket_right => ">",
+                .angle_bracket_left_equal => "<=",
+                .angle_bracket_right_equal => ">=",
+                .dot => ".",
+                .dot_dot => "..",
+                .dot_dot_dot => "...",
+
+                else => @tagName(tag)["keyword_".len..],
+            };
+        }
     };
 
     pub const keywords = std.ComptimeStringMap(Tag, .{
