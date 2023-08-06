@@ -10,12 +10,17 @@ const Diagnostics = @import("Diagnostics.zig");
 allocator: std.mem.Allocator,
 source: [:0]const u8,
 tokens: Token.List,
-diag: Diagnostics = undefined,
+diag: ?*Diagnostics = null,
 nodes: Node.List = .{},
 extras: std.ArrayListUnmanaged(Node.Index) = .{},
 tok_index: Token.Index = 0,
 
 pub const Error = std.mem.Allocator.Error || error{ParsingFailed};
+
+pub fn deinit(parser: *Parser) void {
+    parser.nodes.deinit(parser.allocator);
+    parser.extras.deinit(parser.allocator);
+}
 
 fn emitErrorLoc(
     parser: *Parser,
@@ -23,7 +28,9 @@ fn emitErrorLoc(
     comptime tag: Diagnostics.ErrorTag,
     args: anytype,
 ) !void {
-    parser.diag = try Diagnostics.emitError(parser.allocator, loc, tag, args);
+    if (parser.diag) |diag| {
+        try diag.emitError(parser.allocator, loc, tag, args);
+    }
 }
 
 fn emitError(
@@ -194,10 +201,10 @@ fn parseLocalStmt(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
     const local_token = parser.tok_index - 1;
-    const ident = try parser.parseIdentOrList();
+    const ident = try parser.check(try parser.parseIdentOrList());
     const value = if (tags[parser.tok_index] == .equal) blk: {
         parser.tok_index += 1;
-        break :blk try parser.parseExprOrList();
+        break :blk try parser.check(try parser.parseExprOrList());
     } else Node.invalid;
 
     return try parser.addNode(.{
@@ -245,7 +252,7 @@ fn parseExprOrStmt(parser: *Parser) !Node.Index {
             .tag = .assignment,
             .main_token = main_token,
             .lhs = expr,
-            .rhs = try parser.parseExprOrList(),
+            .rhs = try parser.check(try parser.parseExprOrList()),
         });
     }
 
@@ -288,6 +295,16 @@ fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Err
 
 const parsePrimaryOrList = MakeExprOrList(Parser.parsePrimaryExpr);
 const parseExprOrList = MakeExprOrList(Parser.parseExpr);
+
+inline fn check(parser: *Parser, expr: Node.Index) !Node.Index {
+    const tags = parser.tokens.items(.tag);
+    if (expr == Node.invalid) {
+        try parser.emitError(.expected_token, .{ "expression", tags[parser.tok_index].symbol() });
+        return error.ParsingFailed;
+    }
+
+    return expr;
+}
 
 fn parseExpr(parser: *Parser) !Node.Index {
     return try parser.parseBinaryExpr(0);
@@ -339,6 +356,7 @@ const operator_table = std.enums.directEnumArrayDefault(Token.Tag, OperatorInfo,
 });
 
 fn parseBinaryExpr(parser: *Parser, min_precedence: i32) !Node.Index {
+    const tags = parser.tokens.items(.tag);
     var node = try parser.parseUnaryExpr();
 
     // TODO: associativity
@@ -354,7 +372,10 @@ fn parseBinaryExpr(parser: *Parser, min_precedence: i32) !Node.Index {
         parser.tok_index += 1;
         const rhs = try parser.parseBinaryExpr(info.prec + 1);
         if (rhs == Node.invalid) {
-            try parser.emitError(.expected_token, .{ "expression", "eof" });
+            try parser.emitError(
+                .expected_token,
+                .{ "expression", tags[parser.tok_index].symbol() },
+            );
             return error.ParsingFailed;
         }
 

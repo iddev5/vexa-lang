@@ -17,18 +17,21 @@ tag: ErrorTag,
 loc: Token.Location,
 message: []const u8,
 
+pub fn deinit(diag: *Diagnostics, allocator: std.mem.Allocator) void {
+    allocator.free(diag.message);
+}
+
 pub fn emitError(
+    diag: *Diagnostics,
     allocator: std.mem.Allocator,
     loc: Token.Location,
     comptime tag: ErrorTag,
     args: anytype,
-) !Diagnostics {
+) !void {
     const message = comptime tag.getMessage();
-    return Diagnostics{
-        .tag = tag,
-        .loc = loc,
-        .message = try std.fmt.allocPrint(allocator, message, args),
-    };
+    diag.tag = tag;
+    diag.loc = loc;
+    diag.message = try std.fmt.allocPrint(allocator, message, args);
 }
 
 pub fn render(diag: *Diagnostics, writer: anytype) !void {

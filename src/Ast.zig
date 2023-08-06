@@ -11,7 +11,6 @@ source: [:0]const u8,
 tokens: Token.Slice,
 nodes: Node.Slice,
 extras: []const Node.Index,
-diag: Diagnostics,
 
 pub fn deinit(ast: *Ast) void {
     ast.tokens.deinit(ast.allocator);
@@ -19,7 +18,11 @@ pub fn deinit(ast: *Ast) void {
     ast.allocator.free(ast.extras);
 }
 
-pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
+pub fn parse(
+    allocator: std.mem.Allocator,
+    source: [:0]const u8,
+    diagnostics: ?*Diagnostics,
+) !Ast {
     var tokens: Token.List = .{};
     errdefer tokens.deinit(allocator);
 
@@ -34,7 +37,9 @@ pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
         .allocator = allocator,
         .source = source,
         .tokens = tokens,
+        .diag = diagnostics,
     };
+    defer parser.deinit();
 
     try parser.parse();
 
@@ -44,7 +49,6 @@ pub fn parse(allocator: std.mem.Allocator, source: [:0]const u8) !Ast {
         .tokens = tokens.toOwnedSlice(),
         .nodes = parser.nodes.toOwnedSlice(),
         .extras = try parser.extras.toOwnedSlice(allocator),
-        .diag = parser.diag,
     };
 }
 
@@ -105,12 +109,25 @@ pub fn printTree(tree: *Ast, writer: anytype) !void {
 }
 
 fn testParser(expected_ast_dump: []const u8, source: [:0]const u8) !void {
-    var tree = try Ast.parse(std.testing.allocator, source);
+    var tree = try Ast.parse(std.testing.allocator, source, null);
     defer tree.deinit();
     var buf: [1024]u8 = undefined;
     var stream = std.io.fixedBufferStream(buf[0..]);
     try tree.printTree(stream.writer());
     try std.testing.expectEqualStrings(expected_ast_dump, stream.getWritten());
+}
+
+fn testParserError(source: [:0]const u8, expected_error: []const u8) !void {
+    var diag: Diagnostics = undefined;
+    defer diag.deinit(std.testing.allocator);
+    var tree = Ast.parse(std.testing.allocator, source, &diag) catch |err| switch (err) {
+        error.ParsingFailed => {
+            try std.testing.expectEqualStrings(expected_error, diag.message);
+            return;
+        },
+        else => |e| return e,
+    };
+    defer tree.deinit();
 }
 
 test "chunk" {
@@ -399,4 +416,21 @@ test "multi assignment" {
     ,
         \\local hi, hello = ijk, nil
     );
+}
+test "assignment error" {
+    try testParserError(
+        \\x =
+    , "expected expression, found EOF");
+
+    try testParserError(
+        \\x = while
+    , "expected expression, found while");
+
+    try testParserError(
+        \\local x =
+    , "expected expression, found EOF");
+
+    try testParserError(
+        \\local x = local
+    , "expected expression, found local");
 }

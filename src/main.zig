@@ -23,7 +23,7 @@ pub fn main() !void {
         \\if 1 then
         \\  i = 2
         \\end
-    );
+    , null);
     defer tree.deinit();
 
     try tree.printTree(stdout);
