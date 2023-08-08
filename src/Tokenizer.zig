@@ -15,6 +15,10 @@ pub const Token = struct {
         end: usize,
     };
 
+    pub fn slice(token: Token, source: [:0]const u8) []const u8 {
+        return source[token.loc.start..token.loc.end];
+    }
+
     pub const Tag = enum {
         eof,
         invalid,

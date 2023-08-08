@@ -32,4 +32,5 @@ pub fn main() !void {
 comptime {
     _ = @import("Tokenizer.zig");
     _ = @import("Ast.zig");
+    _ = @import("analysis.zig");
 }
