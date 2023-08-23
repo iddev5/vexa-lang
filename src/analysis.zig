@@ -11,11 +11,11 @@ pub fn gen(tree: *Ast) !Air {
         .allocator = allocator,
     };
 
-    _ = try anl.genChunk(0);
-
+    const start_inst = try anl.genChunk(0);
     return .{
         .allocator = allocator,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
+        .start_inst = start_inst,
         .values = try anl.values.toOwnedSlice(allocator),
         .strings = "",
     };
@@ -70,11 +70,13 @@ const Analyzer = struct {
         const lhs = try anl.genExpression(node_val.lhs);
         const rhs = try anl.genExpression(node_val.rhs);
 
-        return anl.addInst(.{ .binary_op = .{
-            .op = .plus,
-            .lhs = lhs,
-            .rhs = rhs,
-        } });
+        return anl.addInst(switch (anl.tree.tokens.items(.tag)[node_val.main_token]) {
+            .plus => .{ .add = .{ .lhs = lhs, .rhs = rhs } },
+            .minus => .{ .sub = .{ .lhs = lhs, .rhs = rhs } },
+            .multiply => .{ .mul = .{ .lhs = lhs, .rhs = rhs } },
+            .divide => .{ .div = .{ .lhs = lhs, .rhs = rhs } },
+            else => unreachable,
+        });
     }
 
     fn genLiteral(anl: *Analyzer, node: Node.Index) !Inst.Index {
@@ -85,16 +87,10 @@ const Analyzer = struct {
             .keyword_true, .keyword_false, .keyword_nil => {},
             else => {
                 const number = std.fmt.parseFloat(f64, token_val.slice(anl.tree.source)) catch unreachable;
-                const number_idx = try anl.addNumber(number);
-                return anl.addInst(.{ .load_number = number_idx });
+                return anl.addInst(.{ .float = number });
             },
         }
         unreachable;
-    }
-
-    fn addNumber(anl: *Analyzer, num: f64) !Air.ValueIndex {
-        try anl.values.append(anl.allocator, num);
-        return @intCast(anl.values.items.len - 1);
     }
 
     fn addInst(anl: *Analyzer, inst: Inst) !Inst.Index {
@@ -124,11 +120,13 @@ fn testAir(expected_ir_dump: []const u8, source: [:0]const u8) !void {
 
 test "binary op" {
     try testAir(
-        \\load_number
-        \\load_number
-        \\binary_op
+        \\float
+        \\float
+        \\float
+        \\mul
+        \\add
         \\
     ,
-        \\local x = 10 + 20;
+        \\local x = 10 + 20 * 2;
     );
 }

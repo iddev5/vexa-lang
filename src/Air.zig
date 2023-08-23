@@ -4,6 +4,7 @@ const std = @import("std");
 
 allocator: std.mem.Allocator,
 instructions: []const Inst,
+start_inst: usize,
 values: []const f64,
 strings: []const u8,
 
@@ -14,22 +15,25 @@ pub fn deinit(air: *Air) void {
     air.allocator.free(air.values);
 }
 
-pub const Inst = union(enum) {
-    load_number: ValueIndex,
-    binary_op: BinaryOp,
+pub const InstType = enum {
+    float,
+    add,
+    sub,
+    mul,
+    div,
+};
+
+pub const Inst = union(InstType) {
+    float: f64,
+    add: BinaryOp,
+    sub: BinaryOp,
+    mul: BinaryOp,
+    div: BinaryOp,
 
     pub const Index = u32;
 
     pub const BinaryOp = struct {
-        op: OpType,
         lhs: Inst.Index,
         rhs: Inst.Index,
-    };
-
-    pub const OpType = enum {
-        plus,
-        minus,
-        multiply,
-        divide,
     };
 };
