@@ -17,6 +17,8 @@ pub fn gen(tree: *Ast) !Air {
     try funcs.append(allocator, .{
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .start_inst = start_inst,
+        .params = &.{},
+        .result = &.{},
     });
 
     return .{

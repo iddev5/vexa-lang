@@ -8,9 +8,14 @@ functions: []const FuncBlock,
 pub const FuncBlock = struct {
     instructions: []const Inst,
     start_inst: usize,
+    params: []ValueType,
+    result: []ValueType,
 };
 
-pub const ValueIndex = u32;
+pub const ValueType = enum {
+    int,
+    float,
+};
 
 pub fn deinit(air: *Air) void {
     for (air.functions) |func|
