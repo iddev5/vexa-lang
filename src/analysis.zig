@@ -12,12 +12,16 @@ pub fn gen(tree: *Ast) !Air {
     };
 
     const start_inst = try anl.genChunk(0);
-    return .{
-        .allocator = allocator,
+
+    var funcs: std.ArrayListUnmanaged(Air.FuncBlock) = .{};
+    try funcs.append(allocator, .{
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .start_inst = start_inst,
-        .values = try anl.values.toOwnedSlice(allocator),
-        .strings = "",
+    });
+
+    return .{
+        .allocator = allocator,
+        .functions = try funcs.toOwnedSlice(allocator),
     };
 }
 
@@ -25,7 +29,6 @@ const Analyzer = struct {
     tree: *Ast,
     allocator: std.mem.Allocator,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
-    values: std.ArrayListUnmanaged(f64) = .{},
 
     const Error = std.mem.Allocator.Error;
 

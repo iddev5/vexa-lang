@@ -3,16 +3,20 @@ const Air = @This();
 const std = @import("std");
 
 allocator: std.mem.Allocator,
-instructions: []const Inst,
-start_inst: usize,
-values: []const f64,
-strings: []const u8,
+functions: []const FuncBlock,
+
+pub const FuncBlock = struct {
+    instructions: []const Inst,
+    start_inst: usize,
+};
 
 pub const ValueIndex = u32;
 
 pub fn deinit(air: *Air) void {
-    air.allocator.free(air.instructions);
-    air.allocator.free(air.values);
+    for (air.functions) |func|
+        air.allocator.free(func.instructions);
+
+    air.allocator.free(air.functions);
 }
 
 pub const InstType = enum {

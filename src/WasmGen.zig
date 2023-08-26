@@ -41,47 +41,54 @@ pub fn emit(gen: *WasmGen, writer: anytype) !Module {
     try writer.writeAll(module_header[0..]);
     try writer.writeAll(module_version[0..]);
 
-    try gen.airTopLevel(writer, gen.ir.start_inst);
+    for (gen.ir.functions) |func| {
+        try gen.airTopLevel(
+            writer,
+            func.instructions,
+            func.start_inst,
+        );
+    }
+
     return .{
         .code = "",
     };
 }
 
-fn airTopLevel(gen: *WasmGen, writer: anytype, inst: usize) !void {
-    switch (gen.ir.instructions[inst]) {
-        .add, .mul => |op| try gen.airBinOp(writer, inst, op),
+fn airTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
+    switch (ir[inst]) {
+        .add, .mul => |op| try gen.airBinOp(writer, ir, inst, op),
         else => unreachable,
     }
 }
 
-fn airBinOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.BinaryOp) !void {
-    _ = inst;
-    try gen.airExpr(writer, op.lhs);
-    try gen.airExpr(writer, op.rhs);
+fn airBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {
+    const inst_obj = ir[inst];
+    try gen.airExpr(writer, ir, op.lhs);
+    try gen.airExpr(writer, ir, op.rhs);
 
-    try writer.writeIntLittle(u8, @intFromEnum(buildOpcode(.add, .f64)));
+    try emitOpcode(writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
 }
 
-fn airExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
-    switch (gen.ir.instructions[inst]) {
+fn airExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) anyerror!void {
+    switch (ir[inst]) {
         .float => |info| {
-            try writer.writeIntLittle(u8, @intFromEnum(buildOpcode(.@"const", .f64)));
+            try emitOpcode(writer, .f64_const);
 
             const float = @as(u64, @bitCast(info));
             try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
             try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
         },
-        .add, .mul => |info| try gen.airBinOp(writer, inst, info),
+        .add, .mul => |info| try gen.airBinOp(writer, ir, inst, info),
         else => {},
     }
 }
 
-fn buildOpcode(op: Op, ty: ValType) OpCode {
+fn emitOpcode(writer: anytype, op: OpCode) !void {
+    try writer.writeByte(@intFromEnum(op));
+}
+
+fn buildOpcode(op: Air.InstType, ty: ValType) OpCode {
     return switch (op) {
-        .@"const" => switch (ty) {
-            .f64 => .f64_const,
-            else => unreachable, // do when needed
-        },
         .add => switch (ty) {
             .f64 => .f64_add,
             else => unreachable, // do when needed
@@ -98,5 +105,6 @@ fn buildOpcode(op: Op, ty: ValType) OpCode {
             .f64 => .f64_div,
             else => unreachable, // do when needed
         },
+        else => unreachable,
     };
 }
