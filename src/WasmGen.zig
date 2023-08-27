@@ -20,6 +20,7 @@ pub const Opcode = enum(u8) {
 pub const Section = struct {
     ty: Type,
     code: std.ArrayList(u8),
+    count: u32 = 0,
 
     pub fn init(ty: Type, allocator: std.mem.Allocator) Section {
         return .{ .ty = ty, .code = std.ArrayList(u8).init(allocator) };
@@ -30,9 +31,12 @@ pub const Section = struct {
     }
 
     pub fn emit(sec: *const Section, w: anytype) !void {
+        // Section code
         try leb.writeULEB128(w, @intFromEnum(sec.ty));
-        try leb.writeULEB128(w, @as(u8, 0)); // TODO: size?
-        try leb.writeULEB128(w, @as(u8, 1)); // TODO: num something
+        // Size of the section
+        try leb.writeULEB128(w, @as(u32, @intCast(sec.code.items.len)));
+        // Num/count of elements
+        try leb.writeULEB128(w, @as(u32, sec.count));
         try w.writeAll(sec.code.items);
     }
 
@@ -103,7 +107,10 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
         func.start_inst,
     );
 
-    const code_writer = gen.section(.code).code.writer();
+    var code_section = gen.section(.code);
+    code_section.count += 1;
+
+    const code_writer = code_section.code.writer();
     try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len))); // func size
     try leb.writeULEB128(code_writer, @as(u8, 0)); // num locals
 
