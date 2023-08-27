@@ -107,6 +107,24 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
         func.start_inst,
     );
 
+    // Function type
+    var type_section = gen.section(.type);
+    type_section.count += 1;
+
+    const type_writer = type_section.code.writer();
+    try leb.writeULEB128(type_writer, @as(u32, 0)); // TODO: type
+    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.params.len))); // num params
+    // TODO: emit param types
+    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.result.len))); // num results
+
+    // Function entry
+    var func_section = gen.section(.func);
+    func_section.count += 1;
+
+    const func_writer = func_section.code.writer();
+    try leb.writeULEB128(func_writer, func_section.count - 1);
+
+    // Function code
     var code_section = gen.section(.code);
     code_section.count += 1;
 
