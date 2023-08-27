@@ -62,82 +62,88 @@ pub const ValType = enum {
 allocator: std.mem.Allocator,
 ir: *Air,
 sections: [12]Section = undefined,
+num_sections: usize = 0,
 
 const module_header = [_]u8{ 0x00, 0x61, 0x73, 0x6d };
 const module_version = [_]u8{ 0x01, 0x00, 0x00, 0x00 };
+
+fn section(gen: *WasmGen, ty: Section.Type) *Section {
+    for (&gen.sections) |*sec|
+        if (sec.ty == ty)
+            return sec;
+
+    gen.sections[gen.num_sections] = Section.init(ty, gen.allocator);
+    gen.num_sections += 1;
+    return &gen.sections[gen.num_sections - 1];
+}
 
 pub fn emit(gen: *WasmGen, w: anytype) !Module {
     try w.writeAll(module_header[0..]);
     try w.writeAll(module_version[0..]);
 
-    for (gen.ir.functions) |func| {
-        const code_writer = gen.writer(.code);
-        try leb.writeULEB128(code_writer, @as(u8, 0)); // func size
-        try leb.writeULEB128(code_writer, @as(u8, 0)); // num locals
+    for (gen.ir.functions) |func|
+        try gen.emitFunc(func);
 
-        try gen.airTopLevel(
-            func.instructions,
-            func.start_inst,
-        );
-
-        try emitOpcode(code_writer, .end);
-    }
-
-    // for (gen.sections) |sec|
-    try gen.sections[0].emit(w);
+    for (gen.sections[0..gen.num_sections]) |sec|
+        try sec.emit(w);
 
     return .{
         .code = "",
     };
 }
 
-fn getSection(gen: *WasmGen, ty: Section.Type) *Section {
-    for (&gen.sections) |*sec|
-        if (sec.ty == ty)
-            return sec;
+fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
+    // TODO: approximate initial size
+    var func_code = std.ArrayList(u8).init(gen.allocator);
+    defer func_code.deinit();
 
-    // TODO: number
-    gen.sections[0] = Section.init(ty, gen.allocator);
-    return &gen.sections[0];
+    try gen.emitTopLevel(
+        func_code.writer(),
+        func.instructions,
+        func.start_inst,
+    );
+
+    const code_writer = gen.section(.code).code.writer();
+    try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len))); // func size
+    try leb.writeULEB128(code_writer, @as(u8, 0)); // num locals
+
+    try code_writer.writeAll(func_code.items);
+
+    try gen.emitOpcode(code_writer, .end);
 }
 
-fn writer(gen: *WasmGen, ty: Section.Type) std.ArrayList(u8).Writer {
-    return gen.getSection(ty).code.writer();
-}
-
-fn airTopLevel(gen: *WasmGen, ir: []const Air.Inst, inst: usize) !void {
+fn emitTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
     switch (ir[inst]) {
-        .add, .mul => |op| try gen.airBinOp(ir, inst, op),
+        .add, .mul => |op| try gen.emitBinOp(writer, ir, inst, op),
         else => unreachable,
     }
 }
 
-fn airBinOp(gen: *WasmGen, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {
+fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {
     const inst_obj = ir[inst];
-    try gen.airExpr(ir, op.lhs);
-    try gen.airExpr(ir, op.rhs);
+    try gen.emitExpr(writer, ir, op.lhs);
+    try gen.emitExpr(writer, ir, op.rhs);
 
-    const code_writer = gen.getSection(.code).code.writer();
-    try emitOpcode(code_writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
+    try gen.emitOpcode(writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
 }
 
-fn airExpr(gen: *WasmGen, ir: []const Air.Inst, inst: usize) anyerror!void {
-    const code_writer = gen.getSection(.code).code.writer();
+fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) anyerror!void {
     switch (ir[inst]) {
         .float => |info| {
-            try emitOpcode(code_writer, .f64_const);
+            try gen.emitOpcode(writer, .f64_const);
 
             const float = @as(u64, @bitCast(info));
-            try code_writer.writeIntLittle(u32, @as(u32, @truncate(float)));
-            try code_writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
+            try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
+            try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
         },
-        .add, .mul => |info| try gen.airBinOp(ir, inst, info),
+        .add, .mul => |info| try gen.emitBinOp(writer, ir, inst, info),
         else => {},
     }
 }
 
-fn emitOpcode(w: anytype, op: Opcode) !void {
-    try w.writeByte(@intFromEnum(op));
+fn emitOpcode(gen: *WasmGen, writer: anytype, op: Opcode) !void {
+    _ = gen;
+    try writer.writeByte(@intFromEnum(op));
 }
 
 fn buildOpcode(op: Air.InstType, ty: ValType) Opcode {
