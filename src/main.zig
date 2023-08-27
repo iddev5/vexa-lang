@@ -8,7 +8,7 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
 
     var tree = try Ast.parse(allocator,
-        \\local h = 12 + 34
+        \\local h = -1 + 2 * 3 / 4
     , null);
     defer tree.deinit();
 

@@ -64,6 +64,7 @@ const Analyzer = struct {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
             .binary_expression => return try anl.genBinaryExpr(node),
+            .unary_expression => return try anl.genUnaryExpr(node),
             .literal => return try anl.genLiteral(node),
             else => {},
         }
@@ -80,6 +81,16 @@ const Analyzer = struct {
             .minus => .{ .sub = .{ .lhs = lhs, .rhs = rhs } },
             .multiply => .{ .mul = .{ .lhs = lhs, .rhs = rhs } },
             .divide => .{ .div = .{ .lhs = lhs, .rhs = rhs } },
+            else => unreachable,
+        });
+    }
+
+    fn genUnaryExpr(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const node_val = anl.tree.nodes.get(node);
+        const inst = try anl.genExpression(node_val.lhs);
+
+        return anl.addInst(switch (anl.tree.tokens.items(.tag)[node_val.main_token]) {
+            .minus => .{ .negate = .{ .inst = inst } },
             else => unreachable,
         });
     }
@@ -104,8 +115,8 @@ const Analyzer = struct {
     }
 };
 
-fn printAir(air: *Air, writer: anytype) !void {
-    for (air.instructions) |inst| {
+pub fn printAir(air: *Air, writer: anytype) !void {
+    for (air.functions[0].instructions) |inst| {
         try writer.print("{s}\n", .{@tagName(inst)});
     }
 }

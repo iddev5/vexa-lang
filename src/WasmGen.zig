@@ -10,6 +10,7 @@ pub const Module = struct {
 
 pub const Opcode = enum(u8) {
     f64_const = 0x44,
+    f64_neg = 0x9a,
     f64_add = 0xa0,
     f64_sub = 0xa1,
     f64_mul = 0xa2,
@@ -57,11 +58,11 @@ pub const Section = struct {
 };
 
 // TODO: combine all types
-pub const ValType = enum {
-    i32,
-    i64,
-    f32,
-    f64,
+pub const ValType = enum(u8) {
+    i32 = 0x7f,
+    i64 = 0x7e,
+    f32 = 0x7d,
+    f64 = 0x7c,
 };
 
 pub const WasmType = enum(u8) {
@@ -84,6 +85,14 @@ fn section(gen: *WasmGen, ty: Section.Type) *Section {
     gen.sections[gen.num_sections] = Section.init(ty, gen.allocator);
     gen.num_sections += 1;
     return &gen.sections[gen.num_sections - 1];
+}
+
+fn resolveValueType(gen: *WasmGen, ty: Air.ValueType) ValType {
+    _ = gen;
+    return switch (ty) {
+        .float => .f64,
+        else => unreachable, // do when needed
+    };
 }
 
 pub fn emit(gen: *WasmGen, w: anytype) !Module {
@@ -118,9 +127,14 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
 
     const type_writer = type_section.code.writer();
     try leb.writeULEB128(type_writer, @intFromEnum(WasmType.func));
-    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.params.len))); // num params
-    // TODO: emit param types
-    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.result.len))); // num results
+
+    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.params.len)));
+    for (func.params) |param|
+        try type_writer.writeByte(@intFromEnum(gen.resolveValueType(param)));
+
+    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.result.len)));
+    for (func.result) |result|
+        try type_writer.writeByte(@intFromEnum(gen.resolveValueType(result)));
 
     // Function entry
     var func_section = gen.section(.func);
@@ -145,7 +159,7 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
 
 fn emitTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
     switch (ir[inst]) {
-        .add, .mul => |op| try gen.emitBinOp(writer, ir, inst, op),
+        .add, .sub, .mul, .div => |op| try gen.emitBinOp(writer, ir, inst, op),
         else => unreachable,
     }
 }
@@ -154,6 +168,13 @@ fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, 
     const inst_obj = ir[inst];
     try gen.emitExpr(writer, ir, op.lhs);
     try gen.emitExpr(writer, ir, op.rhs);
+
+    try gen.emitOpcode(writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
+}
+
+fn emitUnOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.UnaryOp) !void {
+    const inst_obj = ir[inst];
+    try gen.emitExpr(writer, ir, op.inst);
 
     try gen.emitOpcode(writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
 }
@@ -167,8 +188,8 @@ fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) a
             try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
             try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
         },
-        .add, .mul => |info| try gen.emitBinOp(writer, ir, inst, info),
-        else => {},
+        .add, .sub, .mul, .div => |info| try gen.emitBinOp(writer, ir, inst, info),
+        .negate => |info| try gen.emitUnOp(writer, ir, inst, info),
     }
 }
 
@@ -194,6 +215,10 @@ fn buildOpcode(op: Air.InstType, ty: ValType) Opcode {
         .div => switch (ty) {
             .f64 => .f64_div,
             else => unreachable, // do when needed
+        },
+        .negate => switch (ty) {
+            .f64 => .f64_neg,
+            else => unreachable,
         },
         else => unreachable,
     };

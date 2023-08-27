@@ -400,7 +400,7 @@ fn parseUnaryExpr(parser: *Parser) !Node.Index {
 
     return parser.addNode(.{
         .tag = .unary_expression,
-        .main_token = parser.tok_index,
+        .main_token = parser.tok_index - 1,
         .lhs = try parser.parseUnaryExpr(),
     });
 }

@@ -8,8 +8,8 @@ functions: []const FuncBlock,
 pub const FuncBlock = struct {
     instructions: []const Inst,
     start_inst: usize,
-    params: []ValueType,
-    result: []ValueType,
+    params: []const ValueType,
+    result: []const ValueType,
 };
 
 pub const ValueType = enum {
@@ -30,6 +30,7 @@ pub const InstType = enum {
     sub,
     mul,
     div,
+    negate,
 };
 
 pub const Inst = union(InstType) {
@@ -38,11 +39,16 @@ pub const Inst = union(InstType) {
     sub: BinaryOp,
     mul: BinaryOp,
     div: BinaryOp,
+    negate: UnaryOp,
 
     pub const Index = u32;
 
     pub const BinaryOp = struct {
         lhs: Inst.Index,
         rhs: Inst.Index,
+    };
+
+    pub const UnaryOp = struct {
+        inst: Inst.Index,
     };
 };
