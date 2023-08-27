@@ -34,7 +34,7 @@ pub const Section = struct {
         // Section code
         try leb.writeULEB128(w, @intFromEnum(sec.ty));
         // Size of the section
-        try leb.writeULEB128(w, @as(u32, @intCast(sec.code.items.len)));
+        try leb.writeULEB128(w, @as(u32, @intCast(sec.code.items.len + 1)));
         // Num/count of elements
         try leb.writeULEB128(w, @as(u32, sec.count));
         try w.writeAll(sec.code.items);
@@ -56,11 +56,16 @@ pub const Section = struct {
     };
 };
 
+// TODO: combine all types
 pub const ValType = enum {
     i32,
     i64,
     f32,
     f64,
+};
+
+pub const WasmType = enum(u8) {
+    func = 0x60,
 };
 
 allocator: std.mem.Allocator,
@@ -112,7 +117,7 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
     type_section.count += 1;
 
     const type_writer = type_section.code.writer();
-    try leb.writeULEB128(type_writer, @as(u32, 0)); // TODO: type
+    try leb.writeULEB128(type_writer, @intFromEnum(WasmType.func));
     try leb.writeULEB128(type_writer, @as(u32, @intCast(func.params.len))); // num params
     // TODO: emit param types
     try leb.writeULEB128(type_writer, @as(u32, @intCast(func.result.len))); // num results
@@ -129,7 +134,8 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
     code_section.count += 1;
 
     const code_writer = code_section.code.writer();
-    try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len))); // func size
+    // Emit function size including number of locals and the end opcode
+    try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len + 2)));
     try leb.writeULEB128(code_writer, @as(u8, 0)); // num locals
 
     try code_writer.writeAll(func_code.items);
