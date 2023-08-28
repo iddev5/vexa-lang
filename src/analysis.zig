@@ -36,14 +36,15 @@ const Analyzer = struct {
 
     fn genChunk(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const node_val = anl.tree.nodes.get(node);
-        var i = node_val.lhs;
+        const extras = anl.tree.extras;
+        const first_inst = try anl.genStatement(extras[node_val.lhs]);
+
+        var i = node_val.lhs + 1;
         while (i < node_val.rhs) : (i += 1) {
-            const stmt = anl.tree.extras[i];
-            // TODO: multiple statements
-            return try anl.genStatement(stmt);
+            _ = try anl.genStatement(extras[i]);
         }
 
-        unreachable;
+        return first_inst;
     }
 
     fn genStatement(anl: *Analyzer, node: Node.Index) !Inst.Index {
@@ -57,7 +58,7 @@ const Analyzer = struct {
 
     fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const node_val = anl.tree.nodes.get(node);
-        return try anl.genExpression(node_val.rhs);
+        return try anl.addInst(.{ .local_set = try anl.genExpression(node_val.rhs) });
     }
 
     fn genExpression(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
@@ -100,7 +101,8 @@ const Analyzer = struct {
         const token_val = anl.tree.tokens.get(node_val.main_token);
 
         switch (token_val.tag) {
-            .keyword_true, .keyword_false, .keyword_nil => {},
+            .keyword_nil => {},
+            .keyword_true, .keyword_false => return anl.addInst(.{ .bool = token_val.tag == .keyword_true }),
             else => {
                 const number = std.fmt.parseFloat(f64, token_val.slice(anl.tree.source)) catch unreachable;
                 return anl.addInst(.{ .float = number });

@@ -13,7 +13,7 @@ pub const FuncBlock = struct {
 };
 
 pub const ValueType = enum {
-    int,
+    bool,
     float,
 };
 
@@ -25,21 +25,25 @@ pub fn deinit(air: *Air) void {
 }
 
 pub const InstType = enum {
+    bool,
     float,
     add,
     sub,
     mul,
     div,
     negate,
+    local_set,
 };
 
 pub const Inst = union(InstType) {
+    bool: bool,
     float: f64,
     add: BinaryOp,
     sub: BinaryOp,
     mul: BinaryOp,
     div: BinaryOp,
     negate: UnaryOp,
+    local_set: Index,
 
     pub const Index = u32;
 

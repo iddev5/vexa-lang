@@ -9,6 +9,8 @@ pub const Module = struct {
 };
 
 pub const Opcode = enum(u8) {
+    local_set = 0x21,
+    i32_const = 0x41,
     f64_const = 0x44,
     f64_neg = 0x9a,
     f64_add = 0xa0,
@@ -90,8 +92,8 @@ fn section(gen: *WasmGen, ty: Section.Type) *Section {
 fn resolveValueType(gen: *WasmGen, ty: Air.ValueType) ValType {
     _ = gen;
     return switch (ty) {
+        .bool => .i32,
         .float => .f64,
-        else => unreachable, // do when needed
     };
 }
 
@@ -115,11 +117,12 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
     var func_code = std.ArrayList(u8).init(gen.allocator);
     defer func_code.deinit();
 
-    try gen.emitTopLevel(
-        func_code.writer(),
-        func.instructions,
-        func.start_inst,
-    );
+    for (0..func.instructions.len) |inst_index|
+        try gen.emitTopLevel(
+            func_code.writer(),
+            func.instructions,
+            inst_index,
+        );
 
     // Function type
     var type_section = gen.section(.type);
@@ -159,9 +162,16 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
 
 fn emitTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
     switch (ir[inst]) {
-        .add, .sub, .mul, .div => |op| try gen.emitBinOp(writer, ir, inst, op),
-        else => unreachable,
+        .local_set => try gen.emitLocal(writer, ir, inst),
+        else => {},
     }
+}
+
+fn emitLocal(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
+    const inst_obj = ir[inst];
+    try gen.emitExpr(writer, ir, inst_obj.local_set);
+    try gen.emitOpcode(writer, .local_set);
+    try leb.writeULEB128(writer, @as(u32, 0)); // TODO: index
 }
 
 fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {
@@ -181,6 +191,10 @@ fn emitUnOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, o
 
 fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) anyerror!void {
     switch (ir[inst]) {
+        .bool => |info| {
+            try gen.emitOpcode(writer, .i32_const);
+            try writer.writeByte(@intFromBool(info));
+        },
         .float => |info| {
             try gen.emitOpcode(writer, .f64_const);
 
@@ -190,6 +204,7 @@ fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) a
         },
         .add, .sub, .mul, .div => |info| try gen.emitBinOp(writer, ir, inst, info),
         .negate => |info| try gen.emitUnOp(writer, ir, inst, info),
+        else => unreachable,
     }
 }
 
