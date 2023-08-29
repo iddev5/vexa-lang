@@ -65,6 +65,7 @@ pub const ValType = enum(u8) {
     i64 = 0x7e,
     f32 = 0x7d,
     f64 = 0x7c,
+    _,
 };
 
 pub const WasmType = enum(u8) {
@@ -117,9 +118,17 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
     var func_code = std.ArrayList(u8).init(gen.allocator);
     defer func_code.deinit();
 
+    var func_code_writer = func_code.writer();
+
+    try leb.writeULEB128(func_code_writer, @as(u32, @intCast(func.locals.len)));
+    for (func.locals) |local| {
+        try leb.writeULEB128(func_code_writer, @as(u8, 1));
+        try leb.writeULEB128(func_code_writer, @intFromEnum(gen.resolveValueType(local)));
+    }
+
     for (0..func.instructions.len) |inst_index|
         try gen.emitTopLevel(
-            func_code.writer(),
+            func_code_writer,
             func.instructions,
             inst_index,
         );
@@ -151,12 +160,10 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
     code_section.count += 1;
 
     const code_writer = code_section.code.writer();
-    // Emit function size including number of locals and the end opcode
-    try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len + 2)));
-    try leb.writeULEB128(code_writer, @as(u8, 0)); // num locals
+    // Emit function size the end opcode
+    try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len + 1)));
 
     try code_writer.writeAll(func_code.items);
-
     try gen.emitOpcode(code_writer, .end);
 }
 
@@ -169,9 +176,9 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usiz
 
 fn emitLocal(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
     const inst_obj = ir[inst];
-    try gen.emitExpr(writer, ir, inst_obj.local_set);
+    try gen.emitExpr(writer, ir, inst_obj.local_set.value);
     try gen.emitOpcode(writer, .local_set);
-    try leb.writeULEB128(writer, @as(u32, 0)); // TODO: index
+    try leb.writeULEB128(writer, inst_obj.local_set.index);
 }
 
 fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {

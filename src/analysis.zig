@@ -17,6 +17,7 @@ pub fn gen(tree: *Ast) !Air {
     try funcs.append(allocator, .{
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .start_inst = start_inst,
+        .locals = &.{ .bool, .float },
         .params = &.{},
         .result = &.{},
     });
@@ -31,6 +32,8 @@ const Analyzer = struct {
     tree: *Ast,
     allocator: std.mem.Allocator,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
+    locals: std.StringHashMapUnmanaged(u16) = .{},
+    local_idx: u16 = 0,
 
     const Error = std.mem.Allocator.Error;
 
@@ -58,7 +61,13 @@ const Analyzer = struct {
 
     fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const node_val = anl.tree.nodes.get(node);
-        return try anl.addInst(.{ .local_set = try anl.genExpression(node_val.rhs) });
+        const ident = anl.tree.tokens.get(node_val.lhs).slice(anl.tree.source);
+        try anl.locals.put(anl.allocator, ident, anl.local_idx);
+        anl.local_idx += 1;
+        return try anl.addInst(.{ .local_set = .{
+            .index = anl.local_idx - 1,
+            .value = try anl.genExpression(node_val.rhs),
+        } });
     }
 
     fn genExpression(anl: *Analyzer, node: Node.Index) Error!Inst.Index {

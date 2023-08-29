@@ -8,6 +8,7 @@ functions: []const FuncBlock,
 pub const FuncBlock = struct {
     instructions: []const Inst,
     start_inst: usize,
+    locals: []const ValueType,
     params: []const ValueType,
     result: []const ValueType,
 };
@@ -43,7 +44,10 @@ pub const Inst = union(InstType) {
     mul: BinaryOp,
     div: BinaryOp,
     negate: UnaryOp,
-    local_set: Index,
+    local_set: struct {
+        index: u16,
+        value: Index,
+    },
 
     pub const Index = u32;
 
