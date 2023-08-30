@@ -98,15 +98,39 @@ const Analyzer = struct {
     }
 
     fn genBinaryExpr(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const tags = anl.tree.tokens.items(.tag);
         const node_val = anl.tree.nodes.get(node);
+        const op_tag = tags[node_val.main_token];
         const lhs = try anl.genExpression(node_val.lhs);
         const rhs = try anl.genExpression(node_val.rhs);
+        const lhs_type = anl.getType(lhs);
+        const rhs_type = anl.getType(rhs);
 
-        return anl.addInst(switch (anl.tree.tokens.items(.tag)[node_val.main_token]) {
-            .plus => .{ .add = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
-            .minus => .{ .sub = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
-            .multiply => .{ .mul = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
-            .divide => .{ .div = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
+        var valid_op = false;
+        switch (op_tag) {
+            .plus,
+            .minus,
+            .multiply,
+            .divide,
+            => valid_op = lhs_type == .float and rhs_type == .float,
+            else => unreachable,
+        }
+
+        if (!valid_op) {
+            unreachable; // TODO: emit error
+        }
+
+        const payload = Air.Inst.BinaryOp{
+            .result_ty = lhs_type,
+            .lhs = lhs,
+            .rhs = rhs,
+        };
+
+        return anl.addInst(switch (op_tag) {
+            .plus => .{ .add = payload },
+            .minus => .{ .sub = payload },
+            .multiply => .{ .mul = payload },
+            .divide => .{ .div = payload },
             else => unreachable,
         });
     }
@@ -116,7 +140,10 @@ const Analyzer = struct {
         const inst = try anl.genExpression(node_val.lhs);
 
         return anl.addInst(switch (anl.tree.tokens.items(.tag)[node_val.main_token]) {
-            .minus => .{ .negate = .{ .result_ty = .bool, .inst = inst } },
+            .minus => .{ .negate = .{
+                .result_ty = anl.getType(inst),
+                .inst = inst,
+            } },
             else => unreachable,
         });
     }
