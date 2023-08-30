@@ -17,7 +17,7 @@ pub fn gen(tree: *Ast) !Air {
     try funcs.append(allocator, .{
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .start_inst = start_inst,
-        .locals = &.{ .bool, .float },
+        .locals = anl.locals.values(),
         .params = &.{},
         .result = &.{},
     });
@@ -32,8 +32,7 @@ const Analyzer = struct {
     tree: *Ast,
     allocator: std.mem.Allocator,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
-    locals: std.StringHashMapUnmanaged(u16) = .{},
-    local_idx: u16 = 0,
+    locals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
 
     const Error = std.mem.Allocator.Error;
 
@@ -62,12 +61,29 @@ const Analyzer = struct {
     fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const node_val = anl.tree.nodes.get(node);
         const ident = anl.tree.tokens.get(node_val.lhs).slice(anl.tree.source);
-        try anl.locals.put(anl.allocator, ident, anl.local_idx);
-        anl.local_idx += 1;
+        const value = try anl.genExpression(node_val.rhs);
+
+        try anl.locals.put(anl.allocator, ident, anl.getType(value));
+
         return try anl.addInst(.{ .local_set = .{
-            .index = anl.local_idx - 1,
-            .value = try anl.genExpression(node_val.rhs),
+            .index = @as(u16, @intCast(anl.locals.count())) - 1,
+            .value = value,
         } });
+    }
+
+    fn getType(anl: *Analyzer, node: Node.Index) Air.ValueType {
+        const inst = anl.instructions.items[node];
+        return switch (inst) {
+            .float => .float,
+            .bool => .bool,
+            inline else => |field| {
+                if (@hasField(@TypeOf(field), "result_ty")) {
+                    return @field(field, "result_ty");
+                }
+
+                unreachable;
+            },
+        };
     }
 
     fn genExpression(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
@@ -87,10 +103,10 @@ const Analyzer = struct {
         const rhs = try anl.genExpression(node_val.rhs);
 
         return anl.addInst(switch (anl.tree.tokens.items(.tag)[node_val.main_token]) {
-            .plus => .{ .add = .{ .lhs = lhs, .rhs = rhs } },
-            .minus => .{ .sub = .{ .lhs = lhs, .rhs = rhs } },
-            .multiply => .{ .mul = .{ .lhs = lhs, .rhs = rhs } },
-            .divide => .{ .div = .{ .lhs = lhs, .rhs = rhs } },
+            .plus => .{ .add = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
+            .minus => .{ .sub = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
+            .multiply => .{ .mul = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
+            .divide => .{ .div = .{ .result_ty = .float, .lhs = lhs, .rhs = rhs } },
             else => unreachable,
         });
     }
@@ -100,7 +116,7 @@ const Analyzer = struct {
         const inst = try anl.genExpression(node_val.lhs);
 
         return anl.addInst(switch (anl.tree.tokens.items(.tag)[node_val.main_token]) {
-            .minus => .{ .negate = .{ .inst = inst } },
+            .minus => .{ .negate = .{ .result_ty = .bool, .inst = inst } },
             else => unreachable,
         });
     }

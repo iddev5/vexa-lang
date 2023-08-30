@@ -52,11 +52,13 @@ pub const Inst = union(InstType) {
     pub const Index = u32;
 
     pub const BinaryOp = struct {
+        result_ty: ValueType,
         lhs: Inst.Index,
         rhs: Inst.Index,
     };
 
     pub const UnaryOp = struct {
+        result_ty: ValueType,
         inst: Inst.Index,
     };
 };
