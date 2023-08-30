@@ -9,7 +9,7 @@ pub fn main() !void {
 
     var tree = try Ast.parse(allocator,
         \\local h = -1 + 2 * 3 / 4
-        \\local i = 2 >= 1
+        \\local i = true == true
     , null);
     defer tree.deinit();
 

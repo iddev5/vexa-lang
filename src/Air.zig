@@ -25,19 +25,6 @@ pub fn deinit(air: *Air) void {
     air.allocator.free(air.functions);
 }
 
-// pub const InstType = enum {
-//     bool,
-//     float,
-//     add,
-//     sub,
-//     mul,
-//     div,
-//     equal,
-//     not_equal,
-//     negate,
-//     local_set,
-// };
-
 pub const InstType = std.meta.Tag(Inst);
 
 pub const Inst = union(enum) {

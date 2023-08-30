@@ -12,6 +12,8 @@ pub const Opcode = enum(u8) {
     local_set = 0x21,
     i32_const = 0x41,
     f64_const = 0x44,
+    i32_eq = 0x46,
+    i32_ne = 0x47,
     f64_eq = 0x61,
     f64_ne = 0x62,
     f64_lt = 0x63,
@@ -192,14 +194,20 @@ fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, 
     try gen.emitExpr(writer, ir, op.lhs);
     try gen.emitExpr(writer, ir, op.rhs);
 
-    try gen.emitOpcode(writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
+    try gen.emitOpcode(writer, buildOpcode(
+        std.meta.activeTag(inst_obj),
+        gen.resolveValueType(op.result_ty),
+    ));
 }
 
 fn emitUnOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.UnaryOp) !void {
     const inst_obj = ir[inst];
     try gen.emitExpr(writer, ir, op.inst);
 
-    try gen.emitOpcode(writer, buildOpcode(std.meta.activeTag(inst_obj), .f64));
+    try gen.emitOpcode(writer, buildOpcode(
+        std.meta.activeTag(inst_obj),
+        gen.resolveValueType(op.result_ty),
+    ));
 }
 
 fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) anyerror!void {
@@ -259,10 +267,12 @@ fn buildOpcode(op: Air.InstType, ty: ValType) Opcode {
             else => unreachable,
         },
         .equal => switch (ty) {
+            .i32 => .i32_eq,
             .f64 => .f64_eq,
             else => unreachable,
         },
         .not_equal => switch (ty) {
+            .i32 => .i32_ne,
             .f64 => .f64_ne,
             else => unreachable,
         },
