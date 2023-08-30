@@ -25,24 +25,34 @@ pub fn deinit(air: *Air) void {
     air.allocator.free(air.functions);
 }
 
-pub const InstType = enum {
-    bool,
-    float,
-    add,
-    sub,
-    mul,
-    div,
-    negate,
-    local_set,
-};
+// pub const InstType = enum {
+//     bool,
+//     float,
+//     add,
+//     sub,
+//     mul,
+//     div,
+//     equal,
+//     not_equal,
+//     negate,
+//     local_set,
+// };
 
-pub const Inst = union(InstType) {
+pub const InstType = std.meta.Tag(Inst);
+
+pub const Inst = union(enum) {
     bool: bool,
     float: f64,
     add: BinaryOp,
     sub: BinaryOp,
     mul: BinaryOp,
     div: BinaryOp,
+    equal: BinaryOp,
+    not_equal: BinaryOp,
+    less_than: BinaryOp,
+    greater_than: BinaryOp,
+    less_equal: BinaryOp,
+    greater_equal: BinaryOp,
     negate: UnaryOp,
     local_set: struct {
         index: u16,

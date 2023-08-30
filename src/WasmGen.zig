@@ -12,6 +12,12 @@ pub const Opcode = enum(u8) {
     local_set = 0x21,
     i32_const = 0x41,
     f64_const = 0x44,
+    f64_eq = 0x61,
+    f64_ne = 0x62,
+    f64_lt = 0x63,
+    f64_gt = 0x64,
+    f64_le = 0x65,
+    f64_ge = 0x66,
     f64_neg = 0x9a,
     f64_add = 0xa0,
     f64_sub = 0xa1,
@@ -209,7 +215,17 @@ fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) a
             try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
             try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
         },
-        .add, .sub, .mul, .div => |info| try gen.emitBinOp(writer, ir, inst, info),
+        .add,
+        .sub,
+        .mul,
+        .div,
+        .equal,
+        .not_equal,
+        .less_than,
+        .greater_than,
+        .less_equal,
+        .greater_equal,
+        => |info| try gen.emitBinOp(writer, ir, inst, info),
         .negate => |info| try gen.emitUnOp(writer, ir, inst, info),
         else => unreachable,
     }
@@ -240,6 +256,30 @@ fn buildOpcode(op: Air.InstType, ty: ValType) Opcode {
         },
         .negate => switch (ty) {
             .f64 => .f64_neg,
+            else => unreachable,
+        },
+        .equal => switch (ty) {
+            .f64 => .f64_eq,
+            else => unreachable,
+        },
+        .not_equal => switch (ty) {
+            .f64 => .f64_ne,
+            else => unreachable,
+        },
+        .less_than => switch (ty) {
+            .f64 => .f64_lt,
+            else => unreachable,
+        },
+        .greater_than => switch (ty) {
+            .f64 => .f64_gt,
+            else => unreachable,
+        },
+        .less_equal => switch (ty) {
+            .f64 => .f64_le,
+            else => unreachable,
+        },
+        .greater_equal => switch (ty) {
+            .f64 => .f64_ge,
             else => unreachable,
         },
         else => unreachable,

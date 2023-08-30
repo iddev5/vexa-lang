@@ -112,7 +112,14 @@ const Analyzer = struct {
             .minus,
             .multiply,
             .divide,
+            .angle_bracket_left,
+            .angle_bracket_left_equal,
+            .angle_bracket_right,
+            .angle_bracket_right_equal,
             => valid_op = lhs_type == .float and rhs_type == .float,
+            .equal_equal,
+            .tilde_equal,
+            => valid_op = true, // Applicable on all types
             else => unreachable,
         }
 
@@ -120,8 +127,20 @@ const Analyzer = struct {
             unreachable; // TODO: emit error
         }
 
+        var result_ty = lhs_type;
+        switch (op_tag) {
+            .equal_equal,
+            .tilde_equal,
+            .angle_bracket_left,
+            .angle_bracket_left_equal,
+            .angle_bracket_right,
+            .angle_bracket_right_equal,
+            => result_ty = .bool,
+            else => {},
+        }
+
         const payload = Air.Inst.BinaryOp{
-            .result_ty = lhs_type,
+            .result_ty = result_ty,
             .lhs = lhs,
             .rhs = rhs,
         };
@@ -131,6 +150,12 @@ const Analyzer = struct {
             .minus => .{ .sub = payload },
             .multiply => .{ .mul = payload },
             .divide => .{ .div = payload },
+            .equal_equal => .{ .equal = payload },
+            .tilde_equal => .{ .not_equal = payload },
+            .angle_bracket_left => .{ .less_than = payload },
+            .angle_bracket_left_equal => .{ .less_equal = payload },
+            .angle_bracket_right => .{ .greater_than = payload },
+            .angle_bracket_right_equal => .{ .greater_equal = payload },
             else => unreachable,
         });
     }
