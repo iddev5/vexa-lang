@@ -9,6 +9,7 @@ pub const Module = struct {
 };
 
 pub const Opcode = enum(u8) {
+    ret = 0x0f,
     local_set = 0x21,
     i32_const = 0x41,
     f64_const = 0x44,
@@ -101,6 +102,7 @@ fn section(gen: *WasmGen, ty: Section.Type) *Section {
 fn resolveValueType(gen: *WasmGen, ty: Air.ValueType) ValType {
     _ = gen;
     return switch (ty) {
+        .void => unreachable,
         .bool => .i32,
         .float => .f64,
     };
@@ -178,6 +180,7 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
 fn emitTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
     switch (ir[inst]) {
         .local_set => try gen.emitLocal(writer, ir, inst),
+        .ret => try gen.emitRet(writer, ir, inst),
         else => {},
     }
 }
@@ -187,6 +190,11 @@ fn emitLocal(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) 
     try gen.emitExpr(writer, ir, inst_obj.local_set.value);
     try gen.emitOpcode(writer, .local_set);
     try leb.writeULEB128(writer, inst_obj.local_set.index);
+}
+
+fn emitRet(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
+    try gen.emitExpr(writer, ir, ir[inst].ret.value);
+    try gen.emitOpcode(writer, .ret);
 }
 
 fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {

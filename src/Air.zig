@@ -14,6 +14,7 @@ pub const FuncBlock = struct {
 };
 
 pub const ValueType = enum {
+    void,
     bool,
     float,
 };
@@ -28,6 +29,7 @@ pub fn deinit(air: *Air) void {
 pub const InstType = std.meta.Tag(Inst);
 
 pub const Inst = union(enum) {
+    nop: void,
     bool: bool,
     float: f64,
     add: BinaryOp,
@@ -43,6 +45,10 @@ pub const Inst = union(enum) {
     negate: UnaryOp,
     local_set: struct {
         index: u16,
+        value: Index,
+    },
+    ret: struct {
+        result_ty: ValueType,
         value: Index,
     },
 

@@ -53,6 +53,7 @@ const Analyzer = struct {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
             .assignment => return try anl.genAssignment(node),
+            .return_statement => return try anl.genReturn(node),
             else => {},
         }
         unreachable;
@@ -71,9 +72,24 @@ const Analyzer = struct {
         } });
     }
 
+    fn genReturn(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const lhs_idx = anl.tree.nodes.items(.lhs)[node];
+        const lhs = anl.tree.nodes.get(lhs_idx);
+
+        const value_inst = try anl.genExpression(lhs_idx);
+        return switch (lhs.tag) {
+            .expression_list => unreachable, // TODO: not supported right now
+            else => try anl.addInst(.{ .ret = .{
+                .result_ty = anl.getType(value_inst),
+                .value = value_inst,
+            } }),
+        };
+    }
+
     fn getType(anl: *Analyzer, node: Node.Index) Air.ValueType {
         const inst = anl.instructions.items[node];
         return switch (inst) {
+            .nop => .void,
             .float => .float,
             .bool => .bool,
             inline else => |field| {
@@ -92,7 +108,7 @@ const Analyzer = struct {
             .binary_expression => return try anl.genBinaryExpr(node),
             .unary_expression => return try anl.genUnaryExpr(node),
             .literal => return try anl.genLiteral(node),
-            else => {},
+            else => return try anl.addInst(.{ .nop = {} }),
         }
         unreachable;
     }

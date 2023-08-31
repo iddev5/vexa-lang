@@ -10,6 +10,7 @@ pub fn main() !void {
     var tree = try Ast.parse(allocator,
         \\local h = -1 + 2 * 3 / 4
         \\local i = true == true
+        \\return 12
     , null);
     defer tree.deinit();
 
