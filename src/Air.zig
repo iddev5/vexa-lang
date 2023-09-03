@@ -5,8 +5,7 @@ const std = @import("std");
 allocator: std.mem.Allocator,
 start_inst: u32,
 instructions: []const Inst,
-// TODO: should be globals
-locals: []const ValueType,
+globals: []const ValueType,
 
 pub const ValueType = enum {
     void,
@@ -35,10 +34,8 @@ pub const Inst = union(enum) {
     less_equal: BinaryOp,
     greater_equal: BinaryOp,
     negate: UnaryOp,
-    local_set: struct {
-        index: u16,
-        value: Index,
-    },
+    local_set: SetValue,
+    global_set: SetValue,
     ret: struct {
         result_ty: ValueType,
         value: Index,
@@ -56,6 +53,11 @@ pub const Inst = union(enum) {
     pub const UnaryOp = struct {
         result_ty: ValueType,
         inst: Inst.Index,
+    };
+
+    pub const SetValue = struct {
+        index: u16,
+        value: Index,
     };
 
     pub const Function = struct {

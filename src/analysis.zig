@@ -20,7 +20,7 @@ pub fn gen(tree: *Ast) !Air {
         .allocator = allocator,
         .start_inst = start_inst,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
-        .locals = scope.locals.entries.items(.value),
+        .globals = scope.locals.entries.items(.value),
     };
 }
 
@@ -80,11 +80,13 @@ const Analyzer = struct {
         const value = try anl.genExpression(node_val.rhs);
 
         try anl.current_scope.?.locals.put(anl.allocator, ident, anl.getType(value));
+        const index = @as(u16, @intCast(anl.current_scope.?.locals.count())) - 1;
+        const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
-        return try anl.addInst(.{ .local_set = .{
-            .index = @as(u16, @intCast(anl.current_scope.?.locals.count())) - 1,
-            .value = value,
-        } });
+        if (anl.current_scope.?.parent == null)
+            return try anl.addInst(.{ .global_set = payload });
+
+        return try anl.addInst(.{ .local_set = payload });
     }
 
     fn genReturn(anl: *Analyzer, node: Node.Index) !Inst.Index {

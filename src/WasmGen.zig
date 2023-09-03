@@ -11,6 +11,7 @@ pub const Module = struct {
 pub const Opcode = enum(u8) {
     ret = 0x0f,
     local_set = 0x21,
+    global_set = 0x24,
     i32_const = 0x41,
     f64_const = 0x44,
     i32_eq = 0x46,
@@ -113,14 +114,33 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     try w.writeAll(module_header[0..]);
     try w.writeAll(module_version[0..]);
 
+    const global_section = gen.section(.global);
+    global_section.count = @intCast(gen.ir.globals.len);
+
+    const global_writer = global_section.code.writer();
+    for (gen.ir.globals) |global| {
+        const resolved_type = gen.resolveValueType(global);
+        try leb.writeULEB128(global_writer, @intFromEnum(resolved_type));
+        try leb.writeULEB128(global_writer, @as(u32, @intCast(1))); // TODO: mutability setting
+
+        switch (resolved_type) {
+            .i32 => try gen.emitBool(global_writer, false),
+            .f64 => try gen.emitFloat(global_writer, 0.0),
+            else => {},
+        }
+        try gen.emitOpcode(global_writer, .end);
+    }
+
     // Entry point: implicit main function
     try gen.emitFunc(.{
         .start_inst = gen.ir.start_inst,
         .inst_len = @intCast(gen.ir.instructions.len),
-        .locals = gen.ir.locals,
+        .locals = gen.ir.globals,
         .params = &.{},
         .result = &.{},
     });
+
+    std.sort.insertion(Section, gen.sections[0..gen.num_sections], {}, sortSections);
 
     for (gen.sections[0..gen.num_sections]) |sec|
         try sec.emit(w);
@@ -128,6 +148,11 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     return .{
         .code = "",
     };
+}
+
+fn sortSections(ctx: void, lhs: Section, rhs: Section) bool {
+    _ = ctx;
+    return @intFromEnum(lhs.ty) < @intFromEnum(rhs.ty);
 }
 
 fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
@@ -186,6 +211,7 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
 fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) !void {
     switch (gen.ir.instructions[inst]) {
         .local_set => try gen.emitLocal(writer, inst),
+        .global_set => try gen.emitGlobal(writer, inst),
         .ret => try gen.emitRet(writer, inst),
         else => {},
     }
@@ -196,6 +222,13 @@ fn emitLocal(gen: *WasmGen, writer: anytype, inst: usize) !void {
     try gen.emitExpr(writer, inst_obj.local_set.value);
     try gen.emitOpcode(writer, .local_set);
     try leb.writeULEB128(writer, inst_obj.local_set.index);
+}
+
+fn emitGlobal(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const inst_obj = gen.ir.instructions[inst];
+    try gen.emitExpr(writer, inst_obj.global_set.value);
+    try gen.emitOpcode(writer, .global_set);
+    try leb.writeULEB128(writer, inst_obj.global_set.index);
 }
 
 fn emitRet(gen: *WasmGen, writer: anytype, inst: usize) !void {
@@ -226,17 +259,8 @@ fn emitUnOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.UnaryOp) !
 
 fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
     switch (gen.ir.instructions[inst]) {
-        .bool => |info| {
-            try gen.emitOpcode(writer, .i32_const);
-            try writer.writeByte(@intFromBool(info));
-        },
-        .float => |info| {
-            try gen.emitOpcode(writer, .f64_const);
-
-            const float = @as(u64, @bitCast(info));
-            try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
-            try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
-        },
+        .bool => |info| try gen.emitBool(writer, info),
+        .float => |info| try gen.emitFloat(writer, info),
         .add,
         .sub,
         .mul,
@@ -251,6 +275,19 @@ fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .negate => |info| try gen.emitUnOp(writer, inst, info),
         else => unreachable,
     }
+}
+
+fn emitBool(gen: *WasmGen, writer: anytype, val: bool) !void {
+    try gen.emitOpcode(writer, .i32_const);
+    try writer.writeByte(@intFromBool(val));
+}
+
+fn emitFloat(gen: *WasmGen, writer: anytype, val: f64) !void {
+    try gen.emitOpcode(writer, .f64_const);
+
+    const float = @as(u64, @bitCast(val));
+    try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
+    try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
 }
 
 fn emitOpcode(gen: *WasmGen, writer: anytype, op: Opcode) !void {
