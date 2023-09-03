@@ -117,7 +117,7 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     try gen.emitFunc(.{
         .start_inst = gen.ir.start_inst,
         .inst_len = @intCast(gen.ir.instructions.len),
-        .locals = &.{},
+        .locals = gen.ir.locals,
         .params = &.{},
         .result = &.{},
     });

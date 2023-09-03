@@ -11,24 +11,49 @@ pub fn gen(tree: *Ast) !Air {
         .allocator = allocator,
     };
 
+    // Create a new scope
+    var scope = try Scope.init(anl.allocator, null);
+    defer scope.deinit(allocator);
+    const start_inst = try anl.genChunk(0, scope);
+
     return .{
-        .start_inst = try anl.genChunk(0),
-        .instructions = try anl.instructions.toOwnedSlice(allocator),
         .allocator = allocator,
+        .start_inst = start_inst,
+        .instructions = try anl.instructions.toOwnedSlice(allocator),
+        .locals = scope.locals.entries.items(.value),
     };
 }
+
+const Scope = struct {
+    parent: ?*Scope,
+    locals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
+
+    pub fn init(allocator: std.mem.Allocator, parent: ?*Scope) !*Scope {
+        var scope = try allocator.create(Scope);
+        scope.* = .{ .parent = parent };
+        return scope;
+    }
+
+    pub fn deinit(scope: *Scope, allocator: std.mem.Allocator) void {
+        allocator.destroy(scope);
+    }
+};
 
 const Analyzer = struct {
     tree: *Ast,
     allocator: std.mem.Allocator,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
-    locals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
+    current_scope: ?*Scope = null,
 
     const Error = std.mem.Allocator.Error;
 
-    fn genChunk(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) !Inst.Index {
         const node_val = anl.tree.nodes.get(node);
         const extras = anl.tree.extras;
+
+        anl.current_scope = scope;
+        defer anl.current_scope = anl.current_scope.?.parent;
+
         const first_inst = try anl.genStatement(extras[node_val.lhs]);
 
         var i = node_val.lhs + 1;
@@ -54,10 +79,10 @@ const Analyzer = struct {
         const ident = anl.tree.tokens.get(node_val.lhs).slice(anl.tree.source);
         const value = try anl.genExpression(node_val.rhs);
 
-        try anl.locals.put(anl.allocator, ident, anl.getType(value));
+        try anl.current_scope.?.locals.put(anl.allocator, ident, anl.getType(value));
 
         return try anl.addInst(.{ .local_set = .{
-            .index = @as(u16, @intCast(anl.locals.count())) - 1,
+            .index = @as(u16, @intCast(anl.current_scope.?.locals.count())) - 1,
             .value = value,
         } });
     }

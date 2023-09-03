@@ -2,9 +2,11 @@ const Air = @This();
 
 const std = @import("std");
 
+allocator: std.mem.Allocator,
 start_inst: u32,
 instructions: []const Inst,
-allocator: std.mem.Allocator,
+// TODO: should be globals
+locals: []const ValueType,
 
 pub const ValueType = enum {
     void,
