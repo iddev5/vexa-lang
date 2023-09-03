@@ -11,20 +11,10 @@ pub fn gen(tree: *Ast) !Air {
         .allocator = allocator,
     };
 
-    const start_inst = try anl.genChunk(0);
-
-    var funcs: std.ArrayListUnmanaged(Air.FuncBlock) = .{};
-    try funcs.append(allocator, .{
-        .instructions = try anl.instructions.toOwnedSlice(allocator),
-        .start_inst = start_inst,
-        .locals = anl.locals.values(),
-        .params = &.{},
-        .result = &.{},
-    });
-
     return .{
+        .start_inst = try anl.genChunk(0),
+        .instructions = try anl.instructions.toOwnedSlice(allocator),
         .allocator = allocator,
-        .functions = try funcs.toOwnedSlice(allocator),
     };
 }
 

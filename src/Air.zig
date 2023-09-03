@@ -2,16 +2,9 @@ const Air = @This();
 
 const std = @import("std");
 
+start_inst: u32,
+instructions: []const Inst,
 allocator: std.mem.Allocator,
-functions: []const FuncBlock,
-
-pub const FuncBlock = struct {
-    instructions: []const Inst,
-    start_inst: usize,
-    locals: []const ValueType,
-    params: []const ValueType,
-    result: []const ValueType,
-};
 
 pub const ValueType = enum {
     void,
@@ -20,10 +13,7 @@ pub const ValueType = enum {
 };
 
 pub fn deinit(air: *Air) void {
-    for (air.functions) |func|
-        air.allocator.free(func.instructions);
-
-    air.allocator.free(air.functions);
+    air.allocator.free(air.instructions);
 }
 
 pub const InstType = std.meta.Tag(Inst);
@@ -51,6 +41,7 @@ pub const Inst = union(enum) {
         result_ty: ValueType,
         value: Index,
     },
+    func: Function,
 
     pub const Index = u32;
 
@@ -63,5 +54,13 @@ pub const Inst = union(enum) {
     pub const UnaryOp = struct {
         result_ty: ValueType,
         inst: Inst.Index,
+    };
+
+    pub const Function = struct {
+        start_inst: u32,
+        inst_len: u32,
+        locals: []const ValueType,
+        params: []const ValueType,
+        result: []const ValueType,
     };
 };

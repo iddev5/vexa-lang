@@ -60,11 +60,12 @@ pub const Section = struct {
         table = 4,
         mem = 5,
         global = 6,
-        start = 7,
-        elem = 8,
-        datacount = 9,
+        exp = 7,
+        start = 8,
+        elem = 9,
         code = 10,
         data = 11,
+        datacount = 12,
     };
 };
 
@@ -112,8 +113,14 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     try w.writeAll(module_header[0..]);
     try w.writeAll(module_version[0..]);
 
-    for (gen.ir.functions) |func|
-        try gen.emitFunc(func);
+    // Entry point: implicit main function
+    try gen.emitFunc(.{
+        .start_inst = gen.ir.start_inst,
+        .inst_len = @intCast(gen.ir.instructions.len),
+        .locals = &.{},
+        .params = &.{},
+        .result = &.{},
+    });
 
     for (gen.sections[0..gen.num_sections]) |sec|
         try sec.emit(w);
@@ -123,7 +130,7 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     };
 }
 
-fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
+fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     // TODO: approximate initial size
     var func_code = std.ArrayList(u8).init(gen.allocator);
     defer func_code.deinit();
@@ -136,10 +143,9 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
         try leb.writeULEB128(func_code_writer, @intFromEnum(gen.resolveValueType(local)));
     }
 
-    for (0..func.instructions.len) |inst_index|
+    for (func.start_inst..func.inst_len) |inst_index|
         try gen.emitTopLevel(
             func_code_writer,
-            func.instructions,
             inst_index,
         );
 
@@ -177,30 +183,30 @@ fn emitFunc(gen: *WasmGen, func: Air.FuncBlock) !void {
     try gen.emitOpcode(code_writer, .end);
 }
 
-fn emitTopLevel(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
-    switch (ir[inst]) {
-        .local_set => try gen.emitLocal(writer, ir, inst),
-        .ret => try gen.emitRet(writer, ir, inst),
+fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    switch (gen.ir.instructions[inst]) {
+        .local_set => try gen.emitLocal(writer, inst),
+        .ret => try gen.emitRet(writer, inst),
         else => {},
     }
 }
 
-fn emitLocal(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
-    const inst_obj = ir[inst];
-    try gen.emitExpr(writer, ir, inst_obj.local_set.value);
+fn emitLocal(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const inst_obj = gen.ir.instructions[inst];
+    try gen.emitExpr(writer, inst_obj.local_set.value);
     try gen.emitOpcode(writer, .local_set);
     try leb.writeULEB128(writer, inst_obj.local_set.index);
 }
 
-fn emitRet(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) !void {
-    try gen.emitExpr(writer, ir, ir[inst].ret.value);
+fn emitRet(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    try gen.emitExpr(writer, gen.ir.instructions[inst].ret.value);
     try gen.emitOpcode(writer, .ret);
 }
 
-fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.BinaryOp) !void {
-    const inst_obj = ir[inst];
-    try gen.emitExpr(writer, ir, op.lhs);
-    try gen.emitExpr(writer, ir, op.rhs);
+fn emitBinOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.BinaryOp) !void {
+    const inst_obj = gen.ir.instructions[inst];
+    try gen.emitExpr(writer, op.lhs);
+    try gen.emitExpr(writer, op.rhs);
 
     try gen.emitOpcode(writer, buildOpcode(
         std.meta.activeTag(inst_obj),
@@ -208,9 +214,9 @@ fn emitBinOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, 
     ));
 }
 
-fn emitUnOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, op: Air.Inst.UnaryOp) !void {
-    const inst_obj = ir[inst];
-    try gen.emitExpr(writer, ir, op.inst);
+fn emitUnOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.UnaryOp) !void {
+    const inst_obj = gen.ir.instructions[inst];
+    try gen.emitExpr(writer, op.inst);
 
     try gen.emitOpcode(writer, buildOpcode(
         std.meta.activeTag(inst_obj),
@@ -218,8 +224,8 @@ fn emitUnOp(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize, o
     ));
 }
 
-fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) anyerror!void {
-    switch (ir[inst]) {
+fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
+    switch (gen.ir.instructions[inst]) {
         .bool => |info| {
             try gen.emitOpcode(writer, .i32_const);
             try writer.writeByte(@intFromBool(info));
@@ -241,8 +247,8 @@ fn emitExpr(gen: *WasmGen, writer: anytype, ir: []const Air.Inst, inst: usize) a
         .greater_than,
         .less_equal,
         .greater_equal,
-        => |info| try gen.emitBinOp(writer, ir, inst, info),
-        .negate => |info| try gen.emitUnOp(writer, ir, inst, info),
+        => |info| try gen.emitBinOp(writer, inst, info),
+        .negate => |info| try gen.emitUnOp(writer, inst, info),
         else => unreachable,
     }
 }
