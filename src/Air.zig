@@ -41,6 +41,11 @@ pub const Inst = union(enum) {
         value: Index,
     },
     func: Function,
+    cond: struct {
+        cond: Index,
+        result: Index,
+    },
+    block: Block,
 
     pub const Index = u32;
 
@@ -66,5 +71,10 @@ pub const Inst = union(enum) {
         locals: []const ValueType,
         params: []const ValueType,
         result: []const ValueType,
+    };
+
+    pub const Block = struct {
+        start_inst: u32,
+        inst_len: u32,
     };
 };

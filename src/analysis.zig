@@ -47,7 +47,7 @@ const Analyzer = struct {
 
     const Error = std.mem.Allocator.Error;
 
-    fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) !Inst.Index {
+    fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) anyerror!Inst.Index {
         const node_val = anl.tree.nodes.get(node);
         const extras = anl.tree.extras;
 
@@ -64,11 +64,23 @@ const Analyzer = struct {
         return first_inst;
     }
 
+    fn genBlock(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const scope = try Scope.init(anl.allocator, anl.current_scope);
+        defer scope.deinit(anl.allocator);
+
+        const start_inst = try anl.genChunk(node, scope);
+        return try anl.addInst(.{ .block = .{
+            .start_inst = start_inst,
+            .inst_len = @intCast(anl.instructions.items.len),
+        } });
+    }
+
     fn genStatement(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
             .assignment => return try anl.genAssignment(node),
             .return_statement => return try anl.genReturn(node),
+            .if_statement => return try anl.genIfStat(node),
             else => {},
         }
         unreachable;
@@ -101,6 +113,16 @@ const Analyzer = struct {
                 .value = value_inst,
             } }),
         };
+    }
+
+    fn genIfStat(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const node_val = anl.tree.nodes.get(node);
+        const pair_val = anl.tree.nodes.get(node_val.lhs);
+
+        return try anl.addInst(.{ .cond = .{
+            .cond = try anl.genExpression(pair_val.lhs),
+            .result = try anl.genBlock(pair_val.rhs),
+        } });
     }
 
     fn getType(anl: *Analyzer, node: Node.Index) Air.ValueType {

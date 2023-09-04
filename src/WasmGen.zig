@@ -9,6 +9,7 @@ pub const Module = struct {
 };
 
 pub const Opcode = enum(u8) {
+    if_op = 0x04,
     ret = 0x0f,
     local_set = 0x21,
     global_set = 0x24,
@@ -208,11 +209,23 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     try gen.emitOpcode(code_writer, .end);
 }
 
-fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) !void {
+fn emitBlock(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const block = gen.ir.instructions[inst].block;
+    _ = block;
+
+    // for (block.start_inst..block.inst_len) |inst_index|
+    try gen.emitTopLevel(
+        writer,
+        inst,
+    );
+}
+
+fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
     switch (gen.ir.instructions[inst]) {
         .local_set => try gen.emitLocal(writer, inst),
         .global_set => try gen.emitGlobal(writer, inst),
         .ret => try gen.emitRet(writer, inst),
+        .cond => try gen.emitCond(writer, inst),
         else => {},
     }
 }
@@ -234,6 +247,15 @@ fn emitGlobal(gen: *WasmGen, writer: anytype, inst: usize) !void {
 fn emitRet(gen: *WasmGen, writer: anytype, inst: usize) !void {
     try gen.emitExpr(writer, gen.ir.instructions[inst].ret.value);
     try gen.emitOpcode(writer, .ret);
+}
+
+fn emitCond(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const inst_obj = gen.ir.instructions[inst];
+    try gen.emitExpr(writer, inst_obj.cond.cond);
+    try gen.emitOpcode(writer, .if_op);
+    try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
+    try gen.emitBlock(writer, inst_obj.cond.result);
+    try gen.emitOpcode(writer, .end);
 }
 
 fn emitBinOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.BinaryOp) !void {
