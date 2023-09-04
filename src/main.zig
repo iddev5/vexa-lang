@@ -16,6 +16,9 @@ pub fn main() !void {
         \\if false then
         \\    return false
         \\end
+        \\do
+        \\    local j = 12 * 23
+        \\end
         \\return 12
     , null);
     defer tree.deinit();

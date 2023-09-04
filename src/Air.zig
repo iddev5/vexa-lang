@@ -6,6 +6,7 @@ allocator: std.mem.Allocator,
 start_inst: u32,
 instructions: []const Inst,
 globals: []const ValueType,
+locals: []const ValueType,
 
 pub const ValueType = enum {
     void,
@@ -46,6 +47,7 @@ pub const Inst = union(enum) {
         result: Index,
     },
     block: Block,
+    block_do: Index,
 
     pub const Index = u32;
 

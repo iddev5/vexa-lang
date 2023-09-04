@@ -12,7 +12,7 @@ pub fn gen(tree: *Ast) !Air {
     };
 
     // Create a new scope
-    var scope = try Scope.init(anl.allocator, null);
+    var scope = try Scope.init(anl.allocator, .func, null);
     defer scope.deinit(allocator);
     const start_inst = try anl.genChunk(0, scope);
 
@@ -20,22 +20,30 @@ pub fn gen(tree: *Ast) !Air {
         .allocator = allocator,
         .start_inst = start_inst,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
-        .globals = scope.locals.entries.items(.value),
+        .globals = anl.globals.entries.items(.value),
+        .locals = scope.locals.entries.items(.value),
     };
 }
 
 const Scope = struct {
+    ty: Type,
     parent: ?*Scope,
     locals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
 
-    pub fn init(allocator: std.mem.Allocator, parent: ?*Scope) !*Scope {
+    const Type = enum { func, other };
+
+    pub fn init(allocator: std.mem.Allocator, ty: Type, parent: ?*Scope) !*Scope {
         var scope = try allocator.create(Scope);
-        scope.* = .{ .parent = parent };
+        scope.* = .{ .ty = ty, .parent = parent };
         return scope;
     }
 
     pub fn deinit(scope: *Scope, allocator: std.mem.Allocator) void {
         allocator.destroy(scope);
+    }
+
+    pub fn findNearest(scope: *Scope, ty: Type) ?*Scope {
+        return if (scope.ty == ty) scope else if (scope.parent) |par| par.findNearest(ty) else null;
     }
 };
 
@@ -43,6 +51,7 @@ const Analyzer = struct {
     tree: *Ast,
     allocator: std.mem.Allocator,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
+    globals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
     current_scope: ?*Scope = null,
 
     const Error = std.mem.Allocator.Error;
@@ -65,7 +74,7 @@ const Analyzer = struct {
     }
 
     fn genBlock(anl: *Analyzer, node: Node.Index) !Inst.Index {
-        const scope = try Scope.init(anl.allocator, anl.current_scope);
+        const scope = try Scope.init(anl.allocator, .other, anl.current_scope);
         defer scope.deinit(anl.allocator);
 
         const block = try anl.addInst(.{ .block = .{
@@ -89,6 +98,7 @@ const Analyzer = struct {
         switch (tags[node]) {
             .assignment => return try anl.genAssignment(node),
             .return_statement => return try anl.genReturn(node),
+            .do_statement => return try anl.genDoStat(node),
             .if_statement => return try anl.genIfStat(node),
             else => {},
         }
@@ -100,12 +110,30 @@ const Analyzer = struct {
         const ident = anl.tree.tokens.get(node_val.lhs).slice(anl.tree.source);
         const value = try anl.genExpression(node_val.rhs);
 
-        try anl.current_scope.?.locals.put(anl.allocator, ident, anl.getType(value));
-        const index = @as(u16, @intCast(anl.current_scope.?.locals.count())) - 1;
-        const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
+        if (anl.current_scope.?.parent == null) {
+            var result = try anl.globals.getOrPut(anl.allocator, ident);
+            if (result.found_existing) {
+                // error
+            }
 
-        if (anl.current_scope.?.parent == null)
-            return try anl.addInst(.{ .global_set = payload });
+            result.value_ptr.* = anl.getType(value);
+            const index = @as(u16, @intCast(anl.globals.count())) - 1;
+            return try anl.addInst(.{ .global_set = .{
+                .index = index,
+                .value = value,
+            } });
+        }
+
+        if (anl.current_scope.?.locals.get(ident) != null) {
+            // error
+        }
+
+        // Find nearest function scope
+        var scope = anl.current_scope.?.findNearest(.func) orelse unreachable; // error
+
+        try scope.locals.putNoClobber(anl.allocator, ident, anl.getType(value));
+        const index = @as(u16, @intCast(scope.locals.count())) - 1;
+        const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
         return try anl.addInst(.{ .local_set = payload });
     }
@@ -122,6 +150,11 @@ const Analyzer = struct {
                 .value = value_inst,
             } }),
         };
+    }
+
+    fn genDoStat(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const lhs = anl.tree.nodes.items(.lhs)[node];
+        return try anl.addInst(.{ .block_do = try anl.genBlock(lhs) });
     }
 
     fn genIfStat(anl: *Analyzer, node: Node.Index) !Inst.Index {
@@ -141,8 +174,11 @@ const Analyzer = struct {
             .float => .float,
             .bool => .bool,
             inline else => |field| {
-                if (@hasField(@TypeOf(field), "result_ty")) {
-                    return @field(field, "result_ty");
+                switch (@typeInfo(@TypeOf(field))) {
+                    .Struct => if (@hasField(@TypeOf(field), "result_ty")) {
+                        return @field(field, "result_ty");
+                    },
+                    else => {},
                 }
 
                 unreachable;

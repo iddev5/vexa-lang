@@ -136,7 +136,7 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     try gen.emitFunc(.{
         .start_inst = gen.ir.start_inst,
         .inst_len = @intCast(gen.ir.instructions.len - gen.ir.start_inst),
-        .locals = gen.ir.globals,
+        .locals = gen.ir.locals,
         .params = &.{},
         .result = &.{},
     });
@@ -236,6 +236,7 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .global_set => try gen.emitGlobal(writer, inst),
         .ret => try gen.emitRet(writer, inst),
         .cond => try gen.emitCond(writer, inst),
+        .block_do => |block| try gen.emitBlock(writer, gen.ir.instructions[block].block),
         else => {},
     }
 }
