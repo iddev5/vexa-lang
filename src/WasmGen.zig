@@ -135,7 +135,7 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     // Entry point: implicit main function
     try gen.emitFunc(.{
         .start_inst = gen.ir.start_inst,
-        .inst_len = @intCast(gen.ir.instructions.len),
+        .inst_len = @intCast(gen.ir.instructions.len - gen.ir.start_inst),
         .locals = gen.ir.globals,
         .params = &.{},
         .result = &.{},
@@ -169,11 +169,10 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
         try leb.writeULEB128(func_code_writer, @intFromEnum(gen.resolveValueType(local)));
     }
 
-    for (func.start_inst..func.inst_len) |inst_index|
-        try gen.emitTopLevel(
-            func_code_writer,
-            inst_index,
-        );
+    try gen.emitBlock(func_code_writer, .{
+        .start_inst = func.start_inst,
+        .inst_len = func.inst_len,
+    });
 
     // Function type
     var type_section = gen.section(.type);
@@ -209,15 +208,26 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     try gen.emitOpcode(code_writer, .end);
 }
 
-fn emitBlock(gen: *WasmGen, writer: anytype, inst: usize) !void {
-    const block = gen.ir.instructions[inst].block;
-    _ = block;
+fn emitBlock(gen: *WasmGen, writer: anytype, block: Air.Inst.Block) !void {
+    var inst_index: usize = block.start_inst;
+    while (inst_index < block.start_inst + block.inst_len) : (inst_index += 1) {
+        switch (gen.ir.instructions[inst_index]) {
+            .block => |blk| {
+                inst_index += blk.inst_len;
+                continue;
+            },
+            .func => |fun| {
+                inst_index += fun.inst_len;
+                continue;
+            },
+            else => {},
+        }
 
-    // for (block.start_inst..block.inst_len) |inst_index|
-    try gen.emitTopLevel(
-        writer,
-        inst,
-    );
+        try gen.emitTopLevel(
+            writer,
+            inst_index,
+        );
+    }
 }
 
 fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
@@ -254,7 +264,7 @@ fn emitCond(gen: *WasmGen, writer: anytype, inst: usize) !void {
     try gen.emitExpr(writer, inst_obj.cond.cond);
     try gen.emitOpcode(writer, .if_op);
     try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
-    try gen.emitBlock(writer, inst_obj.cond.result);
+    try gen.emitBlock(writer, gen.ir.instructions[inst_obj.cond.result].block);
     try gen.emitOpcode(writer, .end);
 }
 

@@ -68,11 +68,20 @@ const Analyzer = struct {
         const scope = try Scope.init(anl.allocator, anl.current_scope);
         defer scope.deinit(anl.allocator);
 
-        const start_inst = try anl.genChunk(node, scope);
-        return try anl.addInst(.{ .block = .{
-            .start_inst = start_inst,
-            .inst_len = @intCast(anl.instructions.items.len),
+        const block = try anl.addInst(.{ .block = .{
+            .start_inst = 0,
+            .inst_len = 0,
         } });
+
+        const start_inst: u32 = @intCast(anl.instructions.items.len);
+        _ = try anl.genChunk(node, scope);
+
+        var block_inst = anl.instructions.items[block].block;
+        block_inst.start_inst = start_inst;
+        block_inst.inst_len = @intCast(anl.instructions.items.len - start_inst);
+
+        anl.instructions.items[block].block = block_inst;
+        return block;
     }
 
     fn genStatement(anl: *Analyzer, node: Node.Index) !Inst.Index {

@@ -13,6 +13,9 @@ pub fn main() !void {
         \\if true == true then
         \\    local x = 67 / 22
         \\end
+        \\if false then
+        \\    return false
+        \\end
         \\return 12
     , null);
     defer tree.deinit();
