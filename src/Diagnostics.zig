@@ -4,11 +4,20 @@ const std = @import("std");
 const Token = @import("Tokenizer.zig").Token;
 
 pub const ErrorTag = enum {
+    // Parser errors
     expected_token,
+
+    // Analysis errors
+    invalid_bin_op,
+    redecl_global,
+    redecl_local,
 
     pub fn getMessage(tag: ErrorTag) []const u8 {
         return switch (tag) {
-            .expected_token => "expected {s}, found {s}",
+            .expected_token => "expected '{s}', found '{s}'",
+            .invalid_bin_op => "invalid operator '{s}' between values of type '{s}' and '{s}'",
+            .redecl_global => "redeclaration of global variable '{s}'",
+            .redecl_local => "redeclaration of local variable '{s}'",
         };
     }
 };
@@ -35,6 +44,7 @@ pub fn emitError(
 }
 
 pub fn render(diag: *Diagnostics, writer: anytype) !void {
+    try writer.writeAll("error: ");
     try writer.writeAll(diag.message);
     try writer.writeByte('\n');
 }

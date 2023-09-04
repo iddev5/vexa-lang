@@ -429,9 +429,9 @@ fn parseIdent(parser: *Parser) !Node.Index {
 }
 
 fn expectIdent(parser: *Parser) !Node.Index {
-    const tags = parser.tokens.items(.tag);
-    if (tags[parser.tok_index] != .ident) {
-        try parser.emitError(.expected_token, .{ "identifier", "null" });
+    const token_tag = parser.tokens.items(.tag)[parser.tok_index];
+    if (token_tag != .ident) {
+        try parser.emitError(.expected_token, .{ "an identifier", token_tag.symbol() });
         return error.ParsingFailed;
     }
 
@@ -439,8 +439,9 @@ fn expectIdent(parser: *Parser) !Node.Index {
 }
 
 fn expectToken(parser: *Parser, tag: Token.Tag) !void {
-    if (parser.tokens.items(.tag)[parser.tok_index] != tag) {
-        try parser.emitError(.expected_token, .{ "this", "that" });
+    const token_tag = parser.tokens.items(.tag)[parser.tok_index];
+    if (token_tag != tag) {
+        try parser.emitError(.expected_token, .{ tag.symbol(), token_tag.symbol() });
         return error.ParsingFailed;
     }
 

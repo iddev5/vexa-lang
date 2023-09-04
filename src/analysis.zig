@@ -3,12 +3,15 @@ const Air = @import("Air.zig");
 const Inst = Air.Inst;
 const Ast = @import("Ast.zig");
 const Node = Ast.Node;
+const Diagnostics = @import("Diagnostics.zig");
+const Token = @import("Tokenizer.zig").Token;
 
-pub fn gen(tree: *Ast) !Air {
+pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
     const allocator = tree.allocator;
     var anl = Analyzer{
         .tree = tree,
         .allocator = allocator,
+        .diag = diag,
     };
 
     // Create a new scope
@@ -50,11 +53,17 @@ const Scope = struct {
 const Analyzer = struct {
     tree: *Ast,
     allocator: std.mem.Allocator,
+    diag: ?*Diagnostics,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
     globals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
     current_scope: ?*Scope = null,
 
-    const Error = std.mem.Allocator.Error;
+    const Error = std.mem.Allocator.Error || error{AnalysisFailed};
+
+    fn emitError(anl: *Analyzer, loc: Token.Location, comptime tag: Diagnostics.ErrorTag, args: anytype) !void {
+        if (anl.diag) |diag|
+            try diag.emitError(anl.allocator, loc, tag, args);
+    }
 
     fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) anyerror!Inst.Index {
         const node_val = anl.tree.nodes.get(node);
@@ -106,14 +115,18 @@ const Analyzer = struct {
     }
 
     fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const locs = anl.tree.tokens.items(.loc);
         const node_val = anl.tree.nodes.get(node);
-        const ident = anl.tree.tokens.get(node_val.lhs).slice(anl.tree.source);
+        const ident_list = anl.tree.nodes.get(node_val.lhs);
+        // TODO: use all identifiers
+        const ident = anl.tree.tokens.get(ident_list.main_token).slice(anl.tree.source);
         const value = try anl.genExpression(node_val.rhs);
 
         if (anl.current_scope.?.parent == null) {
             var result = try anl.globals.getOrPut(anl.allocator, ident);
             if (result.found_existing) {
-                // error
+                try anl.emitError(locs[node], .redecl_global, .{ident});
+                return error.AnalysisFailed;
             }
 
             result.value_ptr.* = anl.getType(value);
@@ -124,12 +137,13 @@ const Analyzer = struct {
             } });
         }
 
-        if (anl.current_scope.?.locals.get(ident) != null) {
-            // error
-        }
-
         // Find nearest function scope
-        var scope = anl.current_scope.?.findNearest(.func) orelse unreachable; // error
+        var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
+
+        if (scope.locals.get(ident) != null) {
+            try anl.emitError(locs[node], .redecl_local, .{ident});
+            return error.AnalysisFailed;
+        }
 
         try scope.locals.putNoClobber(anl.allocator, ident, anl.getType(value));
         const index = @as(u16, @intCast(scope.locals.count())) - 1;
@@ -224,7 +238,13 @@ const Analyzer = struct {
         }
 
         if (!valid_op) {
-            unreachable; // TODO: emit error
+            try anl.emitError(
+                anl.tree.tokens.items(.loc)[node],
+                .invalid_bin_op,
+                .{ op_tag.symbol(), @tagName(lhs_type), @tagName(rhs_type) },
+            );
+
+            return error.AnalysisFailed;
         }
 
         var result_ty = lhs_type;
@@ -295,7 +315,7 @@ const Analyzer = struct {
 };
 
 pub fn printAir(air: *Air, writer: anytype) !void {
-    for (air.functions[0].instructions) |inst| {
+    for (air.instructions) |inst| {
         try writer.print("{s}\n", .{@tagName(inst)});
     }
 }
@@ -304,7 +324,7 @@ fn testAir(expected_ir_dump: []const u8, source: [:0]const u8) !void {
     var tree = try Ast.parse(std.testing.allocator, source, null);
     defer tree.deinit();
 
-    var air = try gen(&tree);
+    var air = try gen(&tree, null);
     defer air.deinit();
 
     var buf: [1024]u8 = undefined;

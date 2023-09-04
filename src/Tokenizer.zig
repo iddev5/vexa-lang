@@ -412,6 +412,14 @@ fn testTokenizer(source: [:0]const u8, tags: []const Token.Tag) !void {
     }
 }
 
+fn testIdentifier(source: [:0]const u8, idents: []const []const u8) !void {
+    var tokenizer = Tokenizer.init(source);
+    for (idents) |ident| {
+        const token = tokenizer.next();
+        try std.testing.expectEqualStrings(ident, token.slice(source));
+    }
+}
+
 test "keywords" {
     try testTokenizer(
         "local and while",
@@ -423,6 +431,11 @@ test "ident" {
     try testTokenizer(
         "hello_world _VERSION iD0nt",
         &.{ .ident, .ident, .ident },
+    );
+
+    try testIdentifier(
+        "hello_world _VERSION iD0nt",
+        &.{ "hello_world", "_VERSION", "iD0nt" },
     );
 }
 
