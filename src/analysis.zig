@@ -13,6 +13,7 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
         .allocator = allocator,
         .diag = diag,
     };
+    defer anl.deinit();
 
     // Create a new scope
     var scope = try Scope.init(anl.allocator, .func, null);
@@ -23,8 +24,8 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
         .allocator = allocator,
         .start_inst = start_inst,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
-        .globals = anl.globals.entries.items(.value),
-        .locals = scope.locals.entries.items(.value),
+        .globals = try allocator.dupe(Air.ValueType, anl.globals.entries.items(.value)),
+        .locals = try allocator.dupe(Air.ValueType, scope.locals.entries.items(.value)),
     };
 }
 
@@ -42,6 +43,7 @@ const Scope = struct {
     }
 
     pub fn deinit(scope: *Scope, allocator: std.mem.Allocator) void {
+        scope.locals.deinit(allocator);
         allocator.destroy(scope);
     }
 
@@ -59,6 +61,14 @@ const Analyzer = struct {
     current_scope: ?*Scope = null,
 
     const Error = std.mem.Allocator.Error || error{AnalysisFailed};
+
+    fn deinit(anl: *Analyzer) void {
+        anl.instructions.deinit(anl.allocator);
+        anl.globals.deinit(anl.allocator);
+        if (anl.current_scope) |scope| {
+            scope.deinit(anl.allocator);
+        }
+    }
 
     fn emitError(anl: *Analyzer, loc: Token.Location, comptime tag: Diagnostics.ErrorTag, args: anytype) !void {
         if (anl.diag) |diag|
@@ -340,6 +350,7 @@ test "binary op" {
         \\float
         \\mul
         \\add
+        \\global_set
         \\
     ,
         \\local x = 10 + 20 * 2;

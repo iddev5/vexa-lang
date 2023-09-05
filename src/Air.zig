@@ -16,6 +16,8 @@ pub const ValueType = enum {
 
 pub fn deinit(air: *Air) void {
     air.allocator.free(air.instructions);
+    air.allocator.free(air.globals);
+    air.allocator.free(air.locals);
 }
 
 pub const InstType = std.meta.Tag(Inst);

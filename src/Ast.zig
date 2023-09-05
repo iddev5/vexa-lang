@@ -417,20 +417,21 @@ test "multi assignment" {
         \\local hi, hello = ijk, nil
     );
 }
+
 test "assignment error" {
     try testParserError(
         \\x =
-    , "expected expression, found EOF");
+    , "expected 'expression', found 'EOF'");
 
     try testParserError(
         \\x = while
-    , "expected expression, found while");
+    , "expected 'expression', found 'while'");
 
     try testParserError(
         \\local x =
-    , "expected expression, found EOF");
+    , "expected 'expression', found 'EOF'");
 
     try testParserError(
         \\local x = local
-    , "expected expression, found local");
+    , "expected 'expression', found 'local'");
 }
