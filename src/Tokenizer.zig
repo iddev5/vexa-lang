@@ -13,6 +13,37 @@ pub const Token = struct {
     pub const Location = struct {
         start: usize,
         end: usize,
+
+        pub const Coords = struct {
+            line: usize,
+            column: usize,
+            line_loc: Location,
+        };
+
+        pub fn getCoords(loc: Location, source: [:0]const u8) Coords {
+            var coords: Coords = .{
+                .line = 1,
+                .column = 1,
+                .line_loc = .{ .start = 0, .end = source.len },
+            };
+
+            for (source[0..loc.start], 0..) |ch, i| {
+                if (ch == '\n') {
+                    coords.line += 1;
+                    coords.line_loc.start = i + 1;
+                }
+            }
+
+            for (source[loc.end..], 0..) |ch, i| {
+                if (ch == '\n') {
+                    coords.line_loc.end = loc.end + i;
+                    break;
+                }
+            }
+
+            coords.column += loc.start - coords.line_loc.start;
+            return coords;
+        }
     };
 
     pub fn slice(token: Token, source: [:0]const u8) []const u8 {

@@ -9,11 +9,8 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
 
-    var diag: Diagnostics = undefined;
-    // defer diag.deinit(allocator);
-
-    var tree = Ast.parse(allocator,
-        \\local h = -1 + 2 * 3 / 4
+    const source =
+        \\local hi = -1 + 2 * 3 / 4
         \\local i = true == true
         \\if true == true then
         \\    local x = 67 / 22
@@ -25,7 +22,13 @@ pub fn main() !void {
         \\    local j = true
         \\end
         \\return 12
-    , &diag) catch |err| switch (err) {
+    ;
+
+    var diag: Diagnostics = undefined;
+    diag.source = source;
+    // defer diag.deinit(allocator);
+
+    var tree = Ast.parse(allocator, source, &diag) catch |err| switch (err) {
         error.ParsingFailed => return try diag.render(stderr),
         else => |e| return e,
     };

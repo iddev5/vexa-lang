@@ -125,7 +125,7 @@ const Analyzer = struct {
         if (anl.current_scope.?.parent == null) {
             var result = try anl.globals.getOrPut(anl.allocator, ident);
             if (result.found_existing) {
-                try anl.emitError(locs[node], .redecl_global, .{ident});
+                try anl.emitError(locs[ident_list.main_token], .redecl_global, .{ident});
                 return error.AnalysisFailed;
             }
 
@@ -141,7 +141,7 @@ const Analyzer = struct {
         var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
 
         if (scope.locals.get(ident) != null) {
-            try anl.emitError(locs[node], .redecl_local, .{ident});
+            try anl.emitError(locs[ident_list.main_token], .redecl_local, .{ident});
             return error.AnalysisFailed;
         }
 
@@ -239,7 +239,7 @@ const Analyzer = struct {
 
         if (!valid_op) {
             try anl.emitError(
-                anl.tree.tokens.items(.loc)[node],
+                anl.tree.tokens.items(.loc)[node_val.main_token],
                 .invalid_bin_op,
                 .{ op_tag.symbol(), @tagName(lhs_type), @tagName(rhs_type) },
             );
