@@ -11,6 +11,7 @@ pub const ErrorTag = enum {
     invalid_bin_op,
     redecl_global,
     redecl_local,
+    undecl_ident,
 
     pub fn getMessage(tag: ErrorTag) []const u8 {
         return switch (tag) {
@@ -18,6 +19,7 @@ pub const ErrorTag = enum {
             .invalid_bin_op => "invalid operator '{s}' between values of type '{s}' and '{s}'",
             .redecl_global => "redeclaration of global variable '{s}'",
             .redecl_local => "redeclaration of local variable '{s}'",
+            .undecl_ident => "use of undeclared identifier '{s}'",
         };
     }
 };

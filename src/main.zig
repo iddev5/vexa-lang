@@ -10,10 +10,11 @@ pub fn main() !void {
     const stderr = std.io.getStdErr().writer();
 
     const source =
-        \\hi = -1 + 2 * 3 / 4
-        \\i = true == true
+        \\hi := -1 + 2 * 3 / 4
+        \\i := true == true
+        \\i = false
         \\if true == true then
-        \\    x = 67 / 22
+        \\    i := 67 / 22
         \\end
         \\if false then
         \\    return false
@@ -23,7 +24,7 @@ pub fn main() !void {
         \\    return 10
         \\end
         \\do
-        \\    j = true
+        \\    j := true
         \\end
         \\return 12
     ;

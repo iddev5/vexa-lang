@@ -116,6 +116,7 @@ const Analyzer = struct {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
             .chunk => return try anl.genBlock(node),
+            .declaration => return try anl.genDeclaration(node),
             .assignment => return try anl.genAssignment(node),
             .return_statement => return try anl.genReturn(node),
             .do_statement => return try anl.genDoStat(node),
@@ -125,7 +126,7 @@ const Analyzer = struct {
         unreachable;
     }
 
-    fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn genDeclaration(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const locs = anl.tree.tokens.items(.loc);
         const node_val = anl.tree.nodes.get(node);
         const ident_list = anl.tree.nodes.get(node_val.lhs);
@@ -159,6 +160,39 @@ const Analyzer = struct {
         try scope.locals.putNoClobber(anl.allocator, ident, anl.getType(value));
         const index = @as(u16, @intCast(scope.locals.count())) - 1;
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
+
+        return try anl.addInst(.{ .local_set = payload });
+    }
+
+    fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const locs = anl.tree.tokens.items(.loc);
+        const node_val = anl.tree.nodes.get(node);
+        const ident_list = anl.tree.nodes.get(node_val.lhs);
+        // TODO: use all identifiers
+        const ident = anl.tree.tokens.get(ident_list.main_token).slice(anl.tree.source);
+        const value = try anl.genExpression(node_val.rhs);
+
+        if (anl.current_scope.?.parent == null) {
+            const index = anl.globals.getIndex(ident) orelse {
+                try anl.emitError(locs[ident_list.main_token], .undecl_ident, .{ident});
+                return error.AnalysisFailed;
+            };
+
+            return try anl.addInst(.{ .global_set = .{
+                .index = @intCast(index),
+                .value = value,
+            } });
+        }
+
+        // Find nearest function scope
+        var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
+
+        const index = scope.locals.getIndex(ident) orelse {
+            try anl.emitError(locs[ident_list.main_token], .undecl_ident, .{ident});
+            return error.AnalysisFailed;
+        };
+
+        const payload: Air.Inst.SetValue = .{ .index = @intCast(index), .value = value };
 
         return try anl.addInst(.{ .local_set = payload });
     }
@@ -369,6 +403,6 @@ test "binary op" {
         \\global_set
         \\
     ,
-        \\x = 10 + 20 * 2;
+        \\x := 10 + 20 * 2;
     );
 }
