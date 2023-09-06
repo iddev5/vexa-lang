@@ -66,6 +66,7 @@ pub const Node = struct {
 
     pub const Tag = enum {
         chunk,
+        declaration,
         assignment,
         literal,
         identifier,
@@ -141,7 +142,7 @@ test "chunk" {
         \\    literal
         \\
     ,
-        \\local x = 12
+        \\x = 12
         \\h = 13
     );
 
@@ -185,7 +186,7 @@ test "if_statement" {
         \\
     ,
         \\if true then
-        \\  local h = 15
+        \\  h = 15
         \\end
     );
 
@@ -205,9 +206,9 @@ test "if_statement" {
         \\
     ,
         \\if true then
-        \\  local h = 15
+        \\  h = 15
         \\else
-        \\  local t = 45
+        \\  t = 45
         \\end
     );
 
@@ -234,11 +235,11 @@ test "if_statement" {
         \\
     ,
         \\if true then
-        \\  local h = 15
-        \\elseif 56 then
+        \\  h = 15
+        \\else if 56 then
         \\  i = 34
         \\else
-        \\  local t = 45
+        \\  t = 45
         \\end
     );
 }
@@ -291,7 +292,7 @@ test "do_statement" {
         \\
     ,
         \\do
-        \\  local l = 12
+        \\  l = 12
         \\  if true then
         \\    test = false
         \\  end
@@ -306,6 +307,18 @@ test "break_statement" {
         \\
     ,
         \\break
+    );
+}
+
+test "declaration" {
+    try testParser(
+        \\chunk
+        \\  declaration
+        \\    identifier
+        \\    literal
+        \\
+    ,
+        \\hello := 23
     );
 }
 
@@ -338,30 +351,6 @@ test "assignment" {
     );
 }
 
-test "local assignment" {
-    try testParser(
-        \\chunk
-        \\  assignment
-        \\    identifier
-        \\
-    ,
-        \\local ident
-    );
-
-    try testParser(
-        \\chunk
-        \\  assignment
-        \\    identifier
-        \\    binary_expression
-        \\      literal
-        \\      unary_expression
-        \\        literal
-        \\
-    ,
-        \\local ident = 23 * -34
-    );
-}
-
 test "multi assignment" {
     try testParser(
         \\chunk
@@ -390,32 +379,6 @@ test "multi assignment" {
     ,
         \\hello, hii = 19, hi, true
     );
-
-    try testParser(
-        \\chunk
-        \\  assignment
-        \\    identifier
-        \\    expression_list
-        \\      literal
-        \\      literal
-        \\
-    ,
-        \\local hello = 11, true
-    );
-
-    try testParser(
-        \\chunk
-        \\  assignment
-        \\    identifier_list
-        \\      identifier
-        \\      identifier
-        \\    expression_list
-        \\      identifier
-        \\      literal
-        \\
-    ,
-        \\local hi, hello = ijk, nil
-    );
 }
 
 test "assignment error" {
@@ -428,10 +391,10 @@ test "assignment error" {
     , "expected 'expression', found 'while'");
 
     try testParserError(
-        \\local x =
+        \\x =
     , "expected 'expression', found 'EOF'");
 
     try testParserError(
-        \\local x = local
-    , "expected 'expression', found 'local'");
+        \\x = if
+    , "expected 'expression', found 'if'");
 }

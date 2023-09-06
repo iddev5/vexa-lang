@@ -258,7 +258,7 @@ const Analyzer = struct {
             .angle_bracket_right_equal,
             => valid_op = lhs_type == .float and rhs_type == .float,
             .equal_equal,
-            .tilde_equal,
+            .not_equal,
             => valid_op = true, // Applicable on all types
             else => unreachable,
         }
@@ -276,7 +276,7 @@ const Analyzer = struct {
         var result_ty = lhs_type;
         switch (op_tag) {
             .equal_equal,
-            .tilde_equal,
+            .not_equal,
             .angle_bracket_left,
             .angle_bracket_left_equal,
             .angle_bracket_right,
@@ -297,7 +297,7 @@ const Analyzer = struct {
             .multiply => .{ .mul = payload },
             .divide => .{ .div = payload },
             .equal_equal => .{ .equal = payload },
-            .tilde_equal => .{ .not_equal = payload },
+            .not_equal => .{ .not_equal = payload },
             .angle_bracket_left => .{ .less_than = payload },
             .angle_bracket_left_equal => .{ .less_equal = payload },
             .angle_bracket_right => .{ .greater_than = payload },
@@ -369,6 +369,6 @@ test "binary op" {
         \\global_set
         \\
     ,
-        \\local x = 10 + 20 * 2;
+        \\x = 10 + 20 * 2;
     );
 }

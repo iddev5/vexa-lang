@@ -84,9 +84,7 @@ fn parseChunk(parser: *Parser) Error!Node.Index {
 fn blockFollow(tag: Token.Tag) bool {
     switch (tag) {
         .keyword_else,
-        .keyword_elseif,
         .keyword_end,
-        .keyword_until,
         .eof,
         => return true,
         else => {},
@@ -102,7 +100,6 @@ fn parseStatement(parser: *Parser) !Node.Index {
         .keyword_return => return try parser.parseRetStatement(),
         .keyword_while,
         .keyword_for,
-        .keyword_repeat,
         .keyword_function,
         => unreachable,
         .keyword_break => {
@@ -122,13 +119,6 @@ fn parseStatement(parser: *Parser) !Node.Index {
                 .lhs = chunk,
             });
         },
-        .keyword_local => {
-            parser.tok_index += 1;
-            if (tags[parser.tok_index] == .keyword_function)
-                unreachable;
-
-            return try parser.parseLocalStmt();
-        },
         else => return try parser.parseExprOrStmt(),
     }
     unreachable;
@@ -143,15 +133,17 @@ fn parseIfStatement(parser: *Parser) !Node.Index {
 fn parseIfTree(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
-    // Ignore the 'IF' or 'ELSEIF' keyword
+    // Ignore the 'IF' keyword
     parser.tok_index += 1;
     const if_cont = try parser.parseCondValue();
 
     const else_cont = switch (tags[parser.tok_index]) {
-        .keyword_elseif => try parser.parseIfTree(),
         .keyword_else => blk: {
             parser.tok_index += 1;
-            break :blk try parser.parseChunk();
+            break :blk switch (tags[parser.tok_index]) {
+                .keyword_if => try parser.parseIfTree(),
+                else => try parser.parseChunk(),
+            };
         },
         else => Node.invalid,
     };
@@ -197,24 +189,6 @@ fn parseRetStatement(parser: *Parser) !Node.Index {
     });
 }
 
-fn parseLocalStmt(parser: *Parser) !Node.Index {
-    const tags = parser.tokens.items(.tag);
-
-    const local_token = parser.tok_index - 1;
-    const ident = try parser.check(try parser.parseIdentOrList());
-    const value = if (tags[parser.tok_index] == .equal) blk: {
-        parser.tok_index += 1;
-        break :blk try parser.check(try parser.parseExprOrList());
-    } else Node.invalid;
-
-    return try parser.addNode(.{
-        .tag = .assignment,
-        .main_token = local_token,
-        .lhs = ident,
-        .rhs = value,
-    });
-}
-
 fn parseIdentOrList(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
@@ -246,14 +220,32 @@ fn parseExprOrStmt(parser: *Parser) !Node.Index {
     const main_token = parser.tok_index;
     var expr = try parser.parsePrimaryOrList();
 
-    if (tags[parser.tok_index] == .equal) {
-        parser.tok_index += 1;
-        expr = try parser.addNode(.{
-            .tag = .assignment,
-            .main_token = main_token,
-            .lhs = expr,
-            .rhs = try parser.check(try parser.parseExprOrList()),
-        });
+    switch (tags[parser.tok_index]) {
+        .colon => {
+            parser.tok_index += 1;
+            var rhs: Node.Index = 0;
+            if (tags[parser.tok_index] == .equal) {
+                parser.tok_index += 1;
+                rhs = try parser.check(try parser.parseExprOrList());
+            }
+
+            expr = try parser.addNode(.{
+                .tag = .declaration,
+                .main_token = main_token,
+                .lhs = expr,
+                .rhs = rhs,
+            });
+        },
+        .equal => {
+            parser.tok_index += 1;
+            expr = try parser.addNode(.{
+                .tag = .assignment,
+                .main_token = main_token,
+                .lhs = expr,
+                .rhs = try parser.check(try parser.parseExprOrList()),
+            });
+        },
+        else => {},
     }
 
     return expr;
@@ -339,7 +331,7 @@ const operator_table = std.enums.directEnumArrayDefault(Token.Tag, OperatorInfo,
     .angle_bracket_right = .{ .prec = 30 },
     .angle_bracket_left_equal = .{ .prec = 30 },
     .angle_bracket_right_equal = .{ .prec = 30 },
-    .tilde_equal = .{ .prec = 30 },
+    .not_equal = .{ .prec = 30 },
     .equal_equal = .{ .prec = 30 },
 
     .dot_dot = .{ .prec = 40, .assoc = .right },
@@ -392,7 +384,7 @@ fn parseBinaryExpr(parser: *Parser, min_precedence: i32) !Node.Index {
 
 fn parseUnaryExpr(parser: *Parser) !Node.Index {
     switch (parser.tokens.items(.tag)[parser.tok_index]) {
-        .minus, .hash, .keyword_not => {},
+        .minus, .hash, .not => {},
         else => return parser.parseSimpleExpr(),
     }
 

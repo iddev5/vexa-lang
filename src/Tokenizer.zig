@@ -74,9 +74,10 @@ pub const Token = struct {
         mod,
         exponent,
         hash,
+        not,
         equal,
         equal_equal,
-        tilde_equal,
+        not_equal,
         angle_bracket_left,
         angle_bracket_left_equal,
         angle_bracket_right,
@@ -89,22 +90,17 @@ pub const Token = struct {
         keyword_break,
         keyword_do,
         keyword_else,
-        keyword_elseif,
         keyword_end,
         keyword_false,
         keyword_for,
         keyword_function,
         keyword_if,
         keyword_in,
-        keyword_local,
         keyword_nil,
-        keyword_not,
         keyword_or,
-        keyword_repeat,
         keyword_return,
         keyword_then,
         keyword_true,
-        keyword_until,
         keyword_while,
 
         pub fn symbol(tag: Tag) []const u8 {
@@ -132,9 +128,10 @@ pub const Token = struct {
                 .mod => "%",
                 .exponent => "^",
                 .hash => "#",
+                .not => "!",
                 .equal => "=",
                 .equal_equal => "==",
-                .tilde_equal => "~=",
+                .not_equal => "!=",
                 .angle_bracket_left => "<",
                 .angle_bracket_right => ">",
                 .angle_bracket_left_equal => "<=",
@@ -153,22 +150,17 @@ pub const Token = struct {
         .{ "break", .keyword_break },
         .{ "do", .keyword_do },
         .{ "else", .keyword_else },
-        .{ "elseif", .keyword_elseif },
         .{ "end", .keyword_end },
         .{ "false", .keyword_false },
         .{ "for", .keyword_for },
         .{ "function", .keyword_function },
         .{ "if", .keyword_if },
         .{ "in", .keyword_in },
-        .{ "local", .keyword_local },
         .{ "nil", .keyword_nil },
-        .{ "not", .keyword_not },
         .{ "or", .keyword_or },
-        .{ "repeat", .keyword_repeat },
         .{ "return", .keyword_return },
         .{ "then", .keyword_then },
         .{ "true", .keyword_true },
-        .{ "until", .keyword_until },
         .{ "while", .keyword_while },
     });
 
@@ -188,7 +180,7 @@ const State = enum {
     start,
     ident,
     equal,
-    tilde,
+    not,
     angle_bracket_left,
     angle_bracket_right,
     dot,
@@ -232,7 +224,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
                     result.tag = .num;
                 },
                 '=' => state = .equal,
-                '~' => state = .tilde,
+                '!' => state = .not,
                 '<' => state = .angle_bracket_left,
                 '>' => state = .angle_bracket_right,
                 '.' => state = .dot,
@@ -359,13 +351,16 @@ pub fn next(tokenizer: *Tokenizer) Token {
                     break;
                 },
             },
-            .tilde => switch (ch) {
+            .not => switch (ch) {
                 '=' => {
-                    result.tag = .tilde_equal;
+                    result.tag = .not_equal;
                     index += 1;
                     break;
                 },
-                else => {},
+                else => {
+                    result.tag = .not;
+                    break;
+                },
             },
             .angle_bracket_left => switch (ch) {
                 '=' => {
@@ -453,8 +448,8 @@ fn testIdentifier(source: [:0]const u8, idents: []const []const u8) !void {
 
 test "keywords" {
     try testTokenizer(
-        "local and while",
-        &.{ .keyword_local, .keyword_and, .keyword_while },
+        "and while",
+        &.{ .keyword_and, .keyword_while },
     );
 }
 
@@ -479,7 +474,7 @@ test "number" {
 
 test "symbols" {
     try testTokenizer(
-        "( ) { } [ ] ; : , + - * / % ^ # = == ~= < <= > >= . .. ...",
+        "( ) { } [ ] ; : , + - * / % ^ # ! = == != < <= > >= . .. ...",
         &.{
             .l_paren,
             .r_paren,
@@ -497,9 +492,10 @@ test "symbols" {
             .mod,
             .exponent,
             .hash,
+            .not,
             .equal,
             .equal_equal,
-            .tilde_equal,
+            .not_equal,
             .angle_bracket_left,
             .angle_bracket_left_equal,
             .angle_bracket_right,
