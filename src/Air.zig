@@ -47,9 +47,11 @@ pub const Inst = union(enum) {
     cond: struct {
         cond: Index,
         result: Index,
+        else_blk: Index,
     },
     block: Block,
     block_do: Index,
+    stmt: void,
 
     pub const Index = u32;
 

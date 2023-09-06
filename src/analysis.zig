@@ -75,7 +75,7 @@ const Analyzer = struct {
             try diag.emitError(anl.allocator, loc, tag, args);
     }
 
-    fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) anyerror!Inst.Index {
+    fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) Error!Inst.Index {
         const node_val = anl.tree.nodes.get(node);
         const extras = anl.tree.extras;
 
@@ -92,7 +92,7 @@ const Analyzer = struct {
         return first_inst;
     }
 
-    fn genBlock(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn genBlock(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
         const scope = try Scope.init(anl.allocator, .other, anl.current_scope);
         defer scope.deinit(anl.allocator);
 
@@ -112,9 +112,10 @@ const Analyzer = struct {
         return block;
     }
 
-    fn genStatement(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn genStatement(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
+            .chunk => return try anl.genBlock(node),
             .assignment => return try anl.genAssignment(node),
             .return_statement => return try anl.genReturn(node),
             .do_statement => return try anl.genDoStat(node),
@@ -176,7 +177,7 @@ const Analyzer = struct {
         };
     }
 
-    fn genDoStat(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn genDoStat(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
         const lhs = anl.tree.nodes.items(.lhs)[node];
         return try anl.addInst(.{ .block_do = try anl.genBlock(lhs) });
     }
@@ -185,10 +186,25 @@ const Analyzer = struct {
         const node_val = anl.tree.nodes.get(node);
         const pair_val = anl.tree.nodes.get(node_val.lhs);
 
-        return try anl.addInst(.{ .cond = .{
-            .cond = try anl.genExpression(pair_val.lhs),
-            .result = try anl.genBlock(pair_val.rhs),
-        } });
+        const cond = try anl.addInst(.{ .cond = .{ .cond = 0, .result = 0, .else_blk = 0 } });
+        var stat = anl.instructions.items[cond];
+
+        stat.cond.cond = try anl.genExpression(pair_val.lhs);
+        stat.cond.result = try anl.genBlock(pair_val.rhs);
+        stat.cond.else_blk = if (node_val.rhs != Node.invalid) blk: {
+            const tags = anl.tree.nodes.items(.tag);
+            var stmt: ?Inst.Index = null;
+            if (tags[node_val.rhs] == .if_statement) {
+                stmt = try anl.addInst(.{ .stmt = {} });
+            }
+
+            const block = try anl.genStatement(node_val.rhs);
+            break :blk stmt orelse block;
+        } else try anl.addInst(.{ .nop = {} });
+
+        anl.instructions.items[cond] = stat;
+
+        return cond;
     }
 
     fn getType(anl: *Analyzer, node: Node.Index) Air.ValueType {
@@ -318,7 +334,7 @@ const Analyzer = struct {
         unreachable;
     }
 
-    fn addInst(anl: *Analyzer, inst: Inst) !Inst.Index {
+    fn addInst(anl: *Analyzer, inst: Inst) Error!Inst.Index {
         try anl.instructions.append(anl.allocator, inst);
         return @intCast(anl.instructions.items.len - 1);
     }

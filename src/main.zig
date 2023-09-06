@@ -17,6 +17,10 @@ pub fn main() !void {
         \\end
         \\if false then
         \\    return false
+        \\elseif true then
+        \\    return true
+        \\else
+        \\    return 10
         \\end
         \\do
         \\    local j = true

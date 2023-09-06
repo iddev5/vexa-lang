@@ -10,6 +10,7 @@ pub const Module = struct {
 
 pub const Opcode = enum(u8) {
     if_op = 0x04,
+    else_op = 0x05,
     ret = 0x0f,
     local_set = 0x21,
     global_set = 0x24,
@@ -223,6 +224,10 @@ fn emitBlock(gen: *WasmGen, writer: anytype, block: Air.Inst.Block) !void {
             else => {},
         }
 
+        const iindex: isize = @intCast(inst_index);
+        if (iindex - 1 >= 0 and gen.ir.instructions[inst_index - 1] == .stmt)
+            return;
+
         try gen.emitTopLevel(
             writer,
             inst_index,
@@ -266,6 +271,19 @@ fn emitCond(gen: *WasmGen, writer: anytype, inst: usize) !void {
     try gen.emitOpcode(writer, .if_op);
     try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
     try gen.emitBlock(writer, gen.ir.instructions[inst_obj.cond.result].block);
+
+    switch (gen.ir.instructions[inst_obj.cond.else_blk]) {
+        .nop => {},
+        else => |tag| {
+            try gen.emitOpcode(writer, .else_op);
+            if (tag == .block) {
+                try gen.emitBlock(writer, tag.block);
+            } else {
+                try gen.emitTopLevel(writer, inst_obj.cond.else_blk + 1);
+            }
+        },
+    }
+
     try gen.emitOpcode(writer, .end);
 }
 
