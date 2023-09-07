@@ -12,7 +12,9 @@ pub const Opcode = enum(u8) {
     if_op = 0x04,
     else_op = 0x05,
     ret = 0x0f,
+    local_get = 0x20,
     local_set = 0x21,
+    global_get = 0x23,
     global_set = 0x24,
     i32_const = 0x41,
     f64_const = 0x44,
@@ -312,6 +314,7 @@ fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
     switch (gen.ir.instructions[inst]) {
         .bool => |info| try gen.emitBool(writer, info),
         .float => |info| try gen.emitFloat(writer, info),
+        .ident => try gen.emitIdent(writer, inst),
         .add,
         .sub,
         .mul,
@@ -339,6 +342,12 @@ fn emitFloat(gen: *WasmGen, writer: anytype, val: f64) !void {
     const float = @as(u64, @bitCast(val));
     try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
     try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
+}
+
+fn emitIdent(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const ident = gen.ir.instructions[inst].ident;
+    try gen.emitOpcode(writer, .global_get);
+    try leb.writeULEB128(writer, ident.index);
 }
 
 fn emitOpcode(gen: *WasmGen, writer: anytype, op: Opcode) !void {

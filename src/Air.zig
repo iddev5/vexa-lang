@@ -24,6 +24,7 @@ pub const InstType = std.meta.Tag(Inst);
 
 pub const Inst = union(enum) {
     nop: void,
+    ident: struct { index: u16, result_ty: ValueType },
     bool: bool,
     float: f64,
     add: BinaryOp,
