@@ -29,6 +29,12 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
     };
 }
 
+const Symbol = struct {
+    id: u16,
+    ty: Air.ValueType,
+    global: bool,
+};
+
 const Scope = struct {
     ty: Type,
     parent: ?*Scope,
@@ -126,12 +132,33 @@ const Analyzer = struct {
         unreachable;
     }
 
-    fn getSymbol(anl: *Analyzer, scope: *Scope, symbol: []const u8) ?usize {
-        return scope.findNearest(.func).?.locals.getIndex(symbol) orelse
-            if (scope.parent) |parent|
-            anl.getSymbol(parent, symbol)
-        else
-            anl.globals.getIndex(symbol);
+    fn getSymbol(anl: *Analyzer, scope: *Scope, symbol: []const u8) ?Symbol {
+        var result = Symbol{ .id = 0, .ty = .void, .global = false };
+
+        var check = true;
+        var check_scope = scope.findNearest(.func).?;
+
+        while (check) {
+            if (check_scope.locals.getIndex(symbol)) |index| {
+                result.id = @intCast(index);
+                result.ty = check_scope.locals.get(symbol) orelse unreachable;
+                return result;
+            }
+
+            if (check_scope.parent) |parent| {
+                if (parent.findNearest(.func)) |sc| {
+                    check_scope = sc;
+                } else {
+                    check = false;
+                }
+            } else check = false;
+        }
+
+        result.id = @intCast(anl.globals.getIndex(symbol) orelse return null);
+        result.ty = anl.globals.get(symbol) orelse unreachable;
+        result.global = true;
+
+        return result;
     }
 
     fn genDeclaration(anl: *Analyzer, node: Node.Index) !Inst.Index {
@@ -180,16 +207,14 @@ const Analyzer = struct {
         const ident = anl.tree.tokens.get(ident_list.main_token).slice(anl.tree.source);
         const value = try anl.genExpression(node_val.rhs);
 
-        const global_set = anl.current_scope.?.parent == null;
-
-        const index = anl.getSymbol(anl.current_scope.?, ident) orelse {
+        const symbol = anl.getSymbol(anl.current_scope.?, ident) orelse {
             try anl.emitError(locs[ident_list.main_token], .undecl_ident, .{ident});
             return error.AnalysisFailed;
         };
 
-        const payload: Air.Inst.SetValue = .{ .index = @intCast(index), .value = value };
+        const payload: Air.Inst.SetValue = .{ .index = @intCast(symbol.id), .value = value };
 
-        if (global_set)
+        if (symbol.global)
             return try anl.addInst(.{ .global_set = payload });
 
         return try anl.addInst(.{ .local_set = payload });
@@ -373,14 +398,15 @@ const Analyzer = struct {
         const token_val = anl.tree.tokens.get(node_main);
         const ident = token_val.slice(anl.tree.source);
 
-        const index = anl.getSymbol(anl.current_scope.?, ident) orelse {
+        const symbol = anl.getSymbol(anl.current_scope.?, ident) orelse {
             try anl.emitError(locs[node_main], .undecl_ident, .{ident});
             return error.AnalysisFailed;
         };
 
         return try anl.addInst(.{ .ident = .{
-            .index = @intCast(index),
-            .result_ty = .float,
+            .index = @intCast(symbol.id),
+            .result_ty = symbol.ty,
+            .global = symbol.global,
         } });
     }
 

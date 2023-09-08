@@ -20,7 +20,9 @@ pub fn main() !void {
         \\elseif true then
         \\    return true
         \\else
+        \\    m := 12
         \\    if true then
+        \\        m = m * 2
         \\        return true
         \\    else
         \\        return false

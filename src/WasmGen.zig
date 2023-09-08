@@ -346,7 +346,7 @@ fn emitFloat(gen: *WasmGen, writer: anytype, val: f64) !void {
 
 fn emitIdent(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const ident = gen.ir.instructions[inst].ident;
-    try gen.emitOpcode(writer, .global_get);
+    try gen.emitOpcode(writer, if (ident.global) .global_get else .local_get);
     try leb.writeULEB128(writer, ident.index);
 }
 
