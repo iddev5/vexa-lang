@@ -17,9 +17,14 @@ pub fn main() !void {
         \\end
         \\if false then
         \\    return false
-        \\else if true then
+        \\elseif true then
         \\    return true
         \\else
+        \\    if true then
+        \\        return true
+        \\    else
+        \\        return false
+        \\    end
         \\    return 10
         \\end
         \\do

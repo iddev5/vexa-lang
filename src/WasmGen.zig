@@ -228,7 +228,7 @@ fn emitBlock(gen: *WasmGen, writer: anytype, block: Air.Inst.Block) !void {
 
         const iindex: isize = @intCast(inst_index);
         if (iindex - 1 >= 0 and gen.ir.instructions[inst_index - 1] == .stmt)
-            return;
+            continue;
 
         try gen.emitTopLevel(
             writer,

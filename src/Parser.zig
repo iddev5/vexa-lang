@@ -84,6 +84,7 @@ fn parseChunk(parser: *Parser) Error!Node.Index {
 fn blockFollow(tag: Token.Tag) bool {
     switch (tag) {
         .keyword_else,
+        .keyword_elseif,
         .keyword_end,
         .eof,
         => return true,
@@ -133,17 +134,15 @@ fn parseIfStatement(parser: *Parser) !Node.Index {
 fn parseIfTree(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
-    // Ignore the 'IF' keyword
+    // Ignore the 'IF' or 'ELSEIF' keyword
     parser.tok_index += 1;
     const if_cont = try parser.parseCondValue();
 
     const else_cont = switch (tags[parser.tok_index]) {
+        .keyword_elseif => try parser.parseIfTree(),
         .keyword_else => blk: {
             parser.tok_index += 1;
-            break :blk switch (tags[parser.tok_index]) {
-                .keyword_if => try parser.parseIfTree(),
-                else => try parser.parseChunk(),
-            };
+            break :blk try parser.parseChunk();
         },
         else => Node.invalid,
     };

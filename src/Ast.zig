@@ -236,7 +236,7 @@ test "if_statement" {
     ,
         \\if true then
         \\  h = 15
-        \\else if 56 then
+        \\elseif 56 then
         \\  i = 34
         \\else
         \\  t = 45
