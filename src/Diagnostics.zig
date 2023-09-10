@@ -6,6 +6,7 @@ const Token = @import("Tokenizer.zig").Token;
 pub const ErrorTag = enum {
     // Parser errors
     expected_token,
+    invalid_lhs,
 
     // Analysis errors
     invalid_bin_op,
@@ -13,15 +14,18 @@ pub const ErrorTag = enum {
     redecl_local,
     undecl_ident,
     expected_ty,
+    invalid_stmt,
 
     pub fn getMessage(tag: ErrorTag) []const u8 {
         return switch (tag) {
             .expected_token => "expected '{s}', found '{s}'",
+            .invalid_lhs => "invalid left hand side to assignment",
             .invalid_bin_op => "invalid operator '{s}' between values of type '{s}' and '{s}'",
             .redecl_global => "redeclaration of global variable '{s}'",
             .redecl_local => "redeclaration of local variable '{s}'",
             .undecl_ident => "use of undeclared identifier '{s}'",
             .expected_ty => "expected value of type '{s}', found '{s}'",
+            .invalid_stmt => "invalid statement found",
         };
     }
 };
@@ -64,6 +68,6 @@ pub fn render(diag: *Diagnostics, writer: anytype) !void {
     const line_no_len = std.math.log10_int(loc_coords.line) + 3;
     try writer.writeByteNTimes(' ', line_no_len + loc_coords.column);
     try writer.writeByte('^');
-    try writer.writeByteNTimes('~', diag.loc.end - diag.loc.start - 1);
+    try writer.writeByteNTimes('~', diag.loc.end - diag.loc.start -| 1);
     try writer.writeByte('\n');
 }

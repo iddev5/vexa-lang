@@ -206,36 +206,15 @@ fn parseWhileStatement(parser: *Parser) !Node.Index {
     });
 }
 
-fn parseIdentOrList(parser: *Parser) !Node.Index {
-    const tags = parser.tokens.items(.tag);
-
-    var i: u32 = 1;
-    var last_ident: Node.Index = try parser.expectIdent();
-    while (tags[parser.tok_index] == .comma) : (i += 1) {
-        parser.tok_index += 1;
-        try parser.extras.append(parser.allocator, last_ident);
-        last_ident = try parser.parseIdent();
-    }
-
-    if (i > 1) {
-        try parser.extras.append(parser.allocator, last_ident);
-
-        return parser.addNode(.{
-            .tag = .identifier_list,
-            .main_token = 0,
-            .lhs = @as(u32, @intCast(parser.extras.items.len)) - i,
-            .rhs = @intCast(parser.extras.items.len),
-        });
-    }
-
-    return last_ident;
-}
-
 fn parseExprOrStmt(parser: *Parser) !Node.Index {
     const tags = parser.tokens.items(.tag);
 
     const main_token = parser.tok_index;
     var expr = try parser.parsePrimaryOrList();
+    if (expr == Node.invalid) {
+        try parser.emitError(.invalid_lhs, .{});
+        return error.ParsingFailed;
+    }
 
     switch (tags[parser.tok_index]) {
         .colon => {
