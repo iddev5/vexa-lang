@@ -22,7 +22,7 @@ jobs:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
-                os: [ubuntu-latest, windows-latest]
+                os: [ubuntu-latest]
 
         steps:
             - name: Checkout
@@ -41,5 +41,7 @@ jobs:
               run: zig build run > output.wasm
             - name: Show output
               run: wasm2wat --no-check output.wasm
+            - name: Show C code
+              run: wasm2c output.wasm
             - name: Test
               run: zig build test --summary all
