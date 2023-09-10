@@ -128,6 +128,7 @@ const Analyzer = struct {
             .do_statement => return try anl.genDoStat(node),
             .if_statement => return try anl.genIfStat(node),
             .while_statement => return try anl.genWhileStat(node),
+            .break_statement => return try anl.addInst(.{ .br = {} }),
             else => {},
         }
         unreachable;

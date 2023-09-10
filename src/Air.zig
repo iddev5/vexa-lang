@@ -54,6 +54,7 @@ pub const Inst = union(enum) {
         cond: Index,
         block: Index,
     },
+    br: void,
     block: Block,
     block_do: Index,
     stmt: void,

@@ -34,6 +34,9 @@ pub fn main() !void {
         \\end
         \\return 12
         \\while true do
+        \\    if i == false then
+        \\        break
+        \\    end
         \\    n := 12
         \\end
     ;

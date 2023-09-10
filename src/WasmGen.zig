@@ -249,7 +249,12 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .ret => try gen.emitRet(writer, inst),
         .cond => try gen.emitCond(writer, inst),
         .loop => try gen.emitLoop(writer, inst),
+        .br => {
+            try gen.emitOpcode(writer, .br);
+            try leb.writeULEB128(writer, @as(u32, 1));
+        },
         .block_do => |block| try gen.emitBlock(writer, gen.ir.instructions[block].block),
+
         else => {},
     }
 }
