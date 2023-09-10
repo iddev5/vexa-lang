@@ -214,6 +214,16 @@ const Analyzer = struct {
             return error.AnalysisFailed;
         };
 
+        const val_ty = anl.getType(value);
+        if (symbol.ty != val_ty) {
+            try anl.emitError(
+                locs[anl.tree.nodes.get(node_val.rhs).rhs],
+                .expected_ty,
+                .{ @tagName(symbol.ty), @tagName(val_ty) },
+            );
+            return error.AnalysisFailed;
+        }
+
         const payload: Air.Inst.SetValue = .{ .index = symbol.id, .value = value };
 
         if (symbol.global)

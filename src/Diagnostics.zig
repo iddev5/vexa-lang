@@ -12,6 +12,7 @@ pub const ErrorTag = enum {
     redecl_global,
     redecl_local,
     undecl_ident,
+    expected_ty,
 
     pub fn getMessage(tag: ErrorTag) []const u8 {
         return switch (tag) {
@@ -20,6 +21,7 @@ pub const ErrorTag = enum {
             .redecl_global => "redeclaration of global variable '{s}'",
             .redecl_local => "redeclaration of local variable '{s}'",
             .undecl_ident => "use of undeclared identifier '{s}'",
+            .expected_ty => "expected value of type '{s}', found '{s}'",
         };
     }
 };

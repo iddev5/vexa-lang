@@ -13,7 +13,7 @@ pub fn main() !void {
         \\hi := -1 + 2 * 3 / 4
         \\i := true == true
         \\if true == true then
-        \\    i = 67 / 22 + hi
+        \\    hi = 67 / 22 + hi
         \\end
         \\if false then
         \\    return false
