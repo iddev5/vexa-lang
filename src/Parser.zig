@@ -29,7 +29,7 @@ fn emitErrorLoc(
     args: anytype,
 ) !void {
     if (parser.diag) |diag| {
-        try diag.emitError(parser.allocator, loc, tag, args);
+        try diag.emitError(loc, tag, args);
     }
 }
 

@@ -80,7 +80,7 @@ const Analyzer = struct {
 
     fn emitError(anl: *Analyzer, loc: Token.Location, comptime tag: Diagnostics.ErrorTag, args: anytype) !void {
         if (anl.diag) |diag|
-            try diag.emitError(anl.allocator, loc, tag, args);
+            try diag.emitError(loc, tag, args);
     }
 
     fn genChunk(anl: *Analyzer, node: Node.Index, scope: *Scope) Error!Inst.Index {
@@ -174,7 +174,6 @@ const Analyzer = struct {
             var result = try anl.globals.getOrPut(anl.allocator, ident);
             if (result.found_existing) {
                 try anl.emitError(locs[ident_list.main_token], .redecl_global, .{ident});
-                return error.AnalysisFailed;
             }
 
             result.value_ptr.* = anl.getType(value);
@@ -188,7 +187,6 @@ const Analyzer = struct {
         // Check if the symbol already exists
         if (anl.getSymbol(anl.current_scope.?, ident) != null) {
             try anl.emitError(locs[ident_list.main_token], .redecl_local, .{ident});
-            return error.AnalysisFailed;
         }
 
         // Find nearest function scope
@@ -218,7 +216,6 @@ const Analyzer = struct {
         if (symbol.ty != val_ty) {
             const main_token = anl.tree.nodes.items(.main_token)[node_val.rhs];
             try anl.emitError(locs[main_token], .expected_ty, .{ @tagName(symbol.ty), @tagName(val_ty) });
-            return error.AnalysisFailed;
         }
 
         const payload: Air.Inst.SetValue = .{ .index = symbol.id, .value = value };
@@ -335,7 +332,7 @@ const Analyzer = struct {
             => valid_op = lhs_type == .float and rhs_type == .float,
             .equal_equal,
             .not_equal,
-            => valid_op = true, // Applicable on all types
+            => valid_op = lhs_type == rhs_type, // Applicable on all values of same type
             else => unreachable,
         }
 
@@ -345,8 +342,6 @@ const Analyzer = struct {
                 .invalid_bin_op,
                 .{ op_tag.symbol(), @tagName(lhs_type), @tagName(rhs_type) },
             );
-
-            return error.AnalysisFailed;
         }
 
         var result_ty = lhs_type;

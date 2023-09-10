@@ -44,9 +44,8 @@ pub fn main() !void {
         \\end
     ;
 
-    var diag: Diagnostics = undefined;
-    diag.source = source;
-    // defer diag.deinit(allocator);
+    var diag: Diagnostics = .{ .allocator = allocator, .source = source };
+    defer diag.deinit();
 
     var tree = Ast.parse(allocator, source, &diag) catch |err| switch (err) {
         error.ParsingFailed => return try diag.render(stderr),
@@ -58,6 +57,9 @@ pub fn main() !void {
         error.AnalysisFailed => return try diag.render(stderr),
         else => |e| return e,
     };
+    if (diag.errors.items.len > 0)
+        return try diag.render(stderr);
+
     defer air.deinit();
 
     var gen = WasmGen{
