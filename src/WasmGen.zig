@@ -79,17 +79,22 @@ pub const Section = struct {
     };
 };
 
-// TODO: combine all types
-pub const ValType = enum(u8) {
+pub const WasmType = enum(u8) {
     i32 = 0x7f,
     i64 = 0x7e,
     f32 = 0x7d,
     f64 = 0x7c,
+    vec = 0x7b,
+    funcref = 0x70,
+    externref = 0x6f,
+    func = 0x60,
+    void = 0x40,
     _,
 };
 
-pub const WasmType = enum(u8) {
-    func = 0x60,
+pub const Mutability = enum(u8) {
+    immut = 0x00,
+    mut = 0x01,
 };
 
 allocator: std.mem.Allocator,
@@ -110,7 +115,7 @@ fn section(gen: *WasmGen, ty: Section.Type) *Section {
     return &gen.sections[gen.num_sections - 1];
 }
 
-fn resolveValueType(gen: *WasmGen, ty: Air.ValueType) ValType {
+fn resolveValueType(gen: *WasmGen, ty: Air.ValueType) WasmType {
     _ = gen;
     return switch (ty) {
         .void => unreachable,
@@ -129,8 +134,8 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     const global_writer = global_section.code.writer();
     for (gen.ir.globals) |global| {
         const resolved_type = gen.resolveValueType(global);
-        try leb.writeULEB128(global_writer, @intFromEnum(resolved_type));
-        try leb.writeULEB128(global_writer, @as(u32, @intCast(1))); // TODO: mutability setting
+        try gen.emitEnum(global_writer, resolved_type);
+        try gen.emitEnum(global_writer, Mutability.mut); // TODO: mutability setting
 
         switch (resolved_type) {
             .i32 => try gen.emitBool(global_writer, false),
@@ -171,10 +176,10 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
 
     var func_code_writer = func_code.writer();
 
-    try leb.writeULEB128(func_code_writer, @as(u32, @intCast(func.locals.len)));
+    try gen.emitUnsigned(func_code_writer, @as(u32, @intCast(func.locals.len)));
     for (func.locals) |local| {
-        try leb.writeULEB128(func_code_writer, @as(u8, 1));
-        try leb.writeULEB128(func_code_writer, @intFromEnum(gen.resolveValueType(local)));
+        try gen.emitUnsigned(func_code_writer, @as(u8, 1));
+        try gen.emitEnum(func_code_writer, gen.resolveValueType(local));
     }
 
     try gen.emitBlock(func_code_writer, .{
@@ -187,13 +192,13 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     type_section.count += 1;
 
     const type_writer = type_section.code.writer();
-    try leb.writeULEB128(type_writer, @intFromEnum(WasmType.func));
+    try gen.emitEnum(type_writer, WasmType.func);
 
-    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.params.len)));
+    try gen.emitUnsigned(type_writer, @as(u32, @intCast(func.params.len)));
     for (func.params) |param|
         try type_writer.writeByte(@intFromEnum(gen.resolveValueType(param)));
 
-    try leb.writeULEB128(type_writer, @as(u32, @intCast(func.result.len)));
+    try gen.emitUnsigned(type_writer, @as(u32, @intCast(func.result.len)));
     for (func.result) |result|
         try type_writer.writeByte(@intFromEnum(gen.resolveValueType(result)));
 
@@ -202,7 +207,7 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     func_section.count += 1;
 
     const func_writer = func_section.code.writer();
-    try leb.writeULEB128(func_writer, func_section.count - 1);
+    try gen.emitUnsigned(func_writer, func_section.count - 1);
 
     // Function code
     var code_section = gen.section(.code);
@@ -210,7 +215,7 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
 
     const code_writer = code_section.code.writer();
     // Emit function size the end opcode
-    try leb.writeULEB128(code_writer, @as(u32, @intCast(func_code.items.len + 1)));
+    try gen.emitUnsigned(code_writer, @as(u32, @intCast(func_code.items.len + 1)));
 
     try code_writer.writeAll(func_code.items);
     try gen.emitOpcode(code_writer, .end);
@@ -251,7 +256,7 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .loop => try gen.emitLoop(writer, inst),
         .br => {
             try gen.emitOpcode(writer, .br);
-            try leb.writeULEB128(writer, @as(u32, 1));
+            try gen.emitUnsigned(writer, @as(u32, 1));
         },
         .block_do => |block| try gen.emitBlock(writer, gen.ir.instructions[block].block),
 
@@ -263,14 +268,14 @@ fn emitLocal(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const inst_obj = gen.ir.instructions[inst];
     try gen.emitExpr(writer, inst_obj.local_set.value);
     try gen.emitOpcode(writer, .local_set);
-    try leb.writeULEB128(writer, inst_obj.local_set.index);
+    try gen.emitUnsigned(writer, inst_obj.local_set.index);
 }
 
 fn emitGlobal(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const inst_obj = gen.ir.instructions[inst];
     try gen.emitExpr(writer, inst_obj.global_set.value);
     try gen.emitOpcode(writer, .global_set);
-    try leb.writeULEB128(writer, inst_obj.global_set.index);
+    try gen.emitUnsigned(writer, inst_obj.global_set.index);
 }
 
 fn emitRet(gen: *WasmGen, writer: anytype, inst: usize) !void {
@@ -280,11 +285,17 @@ fn emitRet(gen: *WasmGen, writer: anytype, inst: usize) !void {
 
 fn emitCond(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const inst_obj = gen.ir.instructions[inst];
+
+    // Emit the condition with the if opcode followed by void type
+    // to state that the block does not return any value
     try gen.emitExpr(writer, inst_obj.cond.cond);
     try gen.emitOpcode(writer, .if_op);
-    try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
+    try gen.emitEnum(writer, WasmType.void);
+
+    // Emit the chunk
     try gen.emitBlock(writer, gen.ir.instructions[inst_obj.cond.result].block);
 
+    // Check for presence of else block
     switch (gen.ir.instructions[inst_obj.cond.else_blk]) {
         .nop => {},
         else => |tag| {
@@ -303,18 +314,28 @@ fn emitCond(gen: *WasmGen, writer: anytype, inst: usize) !void {
 fn emitLoop(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const inst_obj = gen.ir.instructions[inst].loop;
 
+    // Create a block and a loop each of result type void
+    // A block and a loop are opposite to each other in that
+    // breaking from a loop jumps to the start of loop while
+    // breaking from a block jumps to the end of it.
     try gen.emitOpcode(writer, .block);
-    try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
+    try gen.emitEnum(writer, WasmType.void);
     try gen.emitOpcode(writer, .loop);
-    try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
+    try gen.emitEnum(writer, WasmType.void);
 
+    // Emit the condition and check if cond == false
+    // If so, jump to the end of the block. The value 1 (one)
+    // after br_if specifies the no of outer scope to jump.
+    // The innermost scope in this case is loop (index 0) while
+    // the one above it is block (index 1)
     try gen.emitExpr(writer, inst_obj.cond);
     try gen.emitOpcode(writer, .i32_eqz);
     try gen.emitOpcode(writer, .br_if);
-    try leb.writeULEB128(writer, @as(u32, 1));
+    try gen.emitUnsigned(writer, @as(u32, 1));
 
+    // Loop normally
     try gen.emitOpcode(writer, .br);
-    try leb.writeULEB128(writer, @as(u32, 0));
+    try gen.emitUnsigned(writer, @as(u32, 0));
 
     try gen.emitBlock(writer, gen.ir.instructions[inst_obj.block].block);
 
@@ -377,10 +398,25 @@ fn emitFloat(gen: *WasmGen, writer: anytype, val: f64) !void {
     try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
 }
 
+fn emitUnsigned(gen: *WasmGen, writer: anytype, val: anytype) !void {
+    _ = gen;
+    try leb.writeULEB128(writer, val);
+}
+
+fn emitSigned(gen: *WasmGen, writer: anytype, val: anytype) !void {
+    _ = gen;
+    try leb.writeILEB128(writer, val);
+}
+
+fn emitEnum(gen: *WasmGen, writer: anytype, val: anytype) !void {
+    _ = gen;
+    try leb.writeULEB128(writer, @intFromEnum(val));
+}
+
 fn emitIdent(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const ident = gen.ir.instructions[inst].ident;
     try gen.emitOpcode(writer, if (ident.global) .global_get else .local_get);
-    try leb.writeULEB128(writer, ident.index);
+    try gen.emitUnsigned(writer, ident.index);
 }
 
 fn emitOpcode(gen: *WasmGen, writer: anytype, op: Opcode) !void {
@@ -388,7 +424,7 @@ fn emitOpcode(gen: *WasmGen, writer: anytype, op: Opcode) !void {
     try writer.writeByte(@intFromEnum(op));
 }
 
-fn buildOpcode(op: Air.InstType, ty: ValType) Opcode {
+fn buildOpcode(op: Air.InstType, ty: WasmType) Opcode {
     return switch (op) {
         .add => switch (ty) {
             .f64 => .f64_add,

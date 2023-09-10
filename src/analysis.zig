@@ -214,7 +214,7 @@ const Analyzer = struct {
             return error.AnalysisFailed;
         };
 
-        const payload: Air.Inst.SetValue = .{ .index = @intCast(symbol.id), .value = value };
+        const payload: Air.Inst.SetValue = .{ .index = symbol.id, .value = value };
 
         if (symbol.global)
             return try anl.addInst(.{ .global_set = payload });
@@ -415,7 +415,7 @@ const Analyzer = struct {
         };
 
         return try anl.addInst(.{ .ident = .{
-            .index = @intCast(symbol.id),
+            .index = symbol.id,
             .result_ty = symbol.ty,
             .global = symbol.global,
         } });
