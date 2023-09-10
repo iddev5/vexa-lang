@@ -55,10 +55,17 @@ pub const Section = struct {
     pub fn emit(sec: *const Section, w: anytype) !void {
         // Section code
         try leb.writeULEB128(w, @intFromEnum(sec.ty));
-        // Size of the section
-        try leb.writeULEB128(w, @as(u32, @intCast(sec.code.items.len + 1)));
-        // Num/count of elements
-        try leb.writeULEB128(w, @as(u32, sec.count));
+
+        // Start section only has one element
+        if (sec.ty == .start) {
+            try leb.writeULEB128(w, @as(u32, @intCast(sec.code.items.len)));
+        } else {
+            // Size of the section
+            try leb.writeULEB128(w, @as(u32, @intCast(sec.code.items.len + 1)));
+            // Num/count of elements
+            try leb.writeULEB128(w, @as(u32, sec.count));
+        }
+
         try w.writeAll(sec.code.items);
     }
 
@@ -95,6 +102,10 @@ pub const WasmType = enum(u8) {
 pub const Mutability = enum(u8) {
     immut = 0x00,
     mut = 0x01,
+};
+
+pub const Export = enum(u8) {
+    func = 0x00,
 };
 
 allocator: std.mem.Allocator,
@@ -153,6 +164,20 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
         .params = &.{},
         .result = &.{},
     });
+
+    const func_section = gen.section(.func);
+    const main_index = func_section.count - 1;
+
+    // Export the main function under the __start symbol
+    var export_section = gen.section(.exp);
+    export_section.count += 1;
+
+    const export_writer = export_section.code.writer();
+    const main_name = "__start";
+    try gen.emitUnsigned(export_writer, @as(u32, @intCast(main_name.len)));
+    try export_writer.writeAll(main_name);
+    try gen.emitEnum(export_writer, Export.func);
+    try gen.emitUnsigned(export_writer, main_index);
 
     std.sort.insertion(Section, gen.sections[0..gen.num_sections], {}, sortSections);
 
