@@ -30,14 +30,17 @@ pub fn main() !void {
         \\    return 10
         \\end
         \\do
-        \\    j := true
+        \\    m := true
         \\end
         \\return 12
         \\while true do
         \\    if i == false then
         \\        break
         \\    end
-        \\    n := 12
+        \\    m := true
+        \\    do
+        \\        m = false
+        \\    end
         \\end
     ;
 

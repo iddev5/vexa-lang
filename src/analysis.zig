@@ -25,7 +25,7 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
         .start_inst = start_inst,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .globals = try allocator.dupe(Air.ValueType, anl.globals.entries.items(.value)),
-        .locals = try allocator.dupe(Air.ValueType, scope.locals.entries.items(.value)),
+        .locals = try scope.types.toOwnedSlice(allocator),
     };
 }
 
@@ -38,7 +38,8 @@ const Symbol = struct {
 const Scope = struct {
     ty: Type,
     parent: ?*Scope,
-    locals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
+    locals: std.StringArrayHashMapUnmanaged(usize) = .{},
+    types: std.ArrayListUnmanaged(Air.ValueType) = .{},
 
     const Type = enum { func, other };
 
@@ -50,6 +51,7 @@ const Scope = struct {
 
     pub fn deinit(scope: *Scope, allocator: std.mem.Allocator) void {
         scope.locals.deinit(allocator);
+        scope.types.deinit(allocator);
         allocator.destroy(scope);
     }
 
@@ -137,23 +139,16 @@ const Analyzer = struct {
     fn getSymbol(anl: *Analyzer, scope: *Scope, symbol: []const u8) ?Symbol {
         var result = Symbol{ .id = 0, .ty = .void, .global = false };
 
-        var check = true;
-        var check_scope = scope.findNearest(.func).?;
-
-        while (check) {
-            if (check_scope.locals.getIndex(symbol)) |index| {
+        var check_scope = scope;
+        while (true) {
+            if (check_scope.locals.get(symbol)) |index| {
+                const nearest_func = check_scope.findNearest(.func).?;
                 result.id = @intCast(index);
-                result.ty = check_scope.locals.get(symbol) orelse unreachable;
+                result.ty = nearest_func.types.items[index];
                 return result;
             }
 
-            if (check_scope.parent) |parent| {
-                if (parent.findNearest(.func)) |sc| {
-                    check_scope = sc;
-                } else {
-                    check = false;
-                }
-            } else check = false;
+            check_scope = check_scope.parent orelse break;
         }
 
         result.id = @intCast(anl.globals.getIndex(symbol) orelse return null);
@@ -194,8 +189,9 @@ const Analyzer = struct {
 
         // Find nearest function scope
         var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
-        try scope.locals.putNoClobber(anl.allocator, ident, anl.getType(value));
-        const index = @as(u16, @intCast(scope.locals.count())) - 1;
+        try scope.types.append(anl.allocator, anl.getType(value));
+        const index = @as(u16, @intCast(scope.types.items.len)) - 1;
+        try anl.current_scope.?.locals.putNoClobber(anl.allocator, ident, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
         return try anl.addInst(.{ .local_set = payload });
