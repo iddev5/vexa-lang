@@ -212,11 +212,8 @@ const Analyzer = struct {
 
         const val_ty = anl.getType(value);
         if (symbol.ty != val_ty) {
-            try anl.emitError(
-                locs[anl.tree.nodes.get(node_val.rhs).rhs],
-                .expected_ty,
-                .{ @tagName(symbol.ty), @tagName(val_ty) },
-            );
+            const main_token = anl.tree.nodes.items(.main_token)[node_val.rhs];
+            try anl.emitError(locs[main_token], .expected_ty, .{ @tagName(symbol.ty), @tagName(val_ty) });
             return error.AnalysisFailed;
         }
 
