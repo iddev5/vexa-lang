@@ -1,0 +1,45 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+    fmt-check:
+        name: Check formatting
+        timeout-minutes: 1
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v1
+            - name: Setup Zig
+              uses: goto-bus-stop/setup-zig@v1
+              with:
+                  version: 0.11.0
+            - name: Check format
+              run: zig fmt --check .
+    build:
+        name: Build and test
+        timeout-minutes: 5
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v1
+            - name: Setup Zig
+              uses: goto-bus-stop/setup-zig@v1
+              with:
+                  version: 0.11.0
+            - name: Setup Wabt
+              uses: mwilliamson/setup-wabt-action@v2
+              with:
+                  wabt-version: 1.0.33
+            - name: Build
+              run: zig build
+            - name: Run demo
+              run: zig build run > output.wasm
+            - name: Show output
+              run: wasm2wat --no-check output.wasm
+            - name: Test
+              run: zig build test --summary all
