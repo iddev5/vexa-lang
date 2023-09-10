@@ -99,7 +99,7 @@ fn parseStatement(parser: *Parser) !Node.Index {
     switch (tags[parser.tok_index]) {
         .keyword_if => return try parser.parseIfStatement(),
         .keyword_return => return try parser.parseRetStatement(),
-        .keyword_while,
+        .keyword_while => return try parser.parseWhileStatement(),
         .keyword_for,
         .keyword_function,
         => unreachable,
@@ -185,6 +185,24 @@ fn parseRetStatement(parser: *Parser) !Node.Index {
         .tag = .return_statement,
         .main_token = return_tok,
         .lhs = ret_val,
+    });
+}
+
+fn parseWhileStatement(parser: *Parser) !Node.Index {
+    // Ignore the 'while' keyword
+    parser.tok_index += 1;
+
+    // The condition for while statement
+    const cond = try parser.parseExpr();
+    try parser.expectToken(.keyword_do);
+    const chunk = try parser.parseChunk();
+    try parser.expectToken(.keyword_end);
+
+    return try parser.addNode(.{
+        .tag = .while_statement,
+        .main_token = undefined,
+        .lhs = cond,
+        .rhs = chunk,
     });
 }
 

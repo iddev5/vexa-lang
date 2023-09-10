@@ -74,7 +74,17 @@ pub const Node = struct {
         return_statement,
         break_statement,
         do_statement,
+
+        /// Main token is undefined
+        /// Lhs is cond_value i.e pair of condition and a chunk
+        /// Rhs is else block
         if_statement,
+
+        /// Main token is undefined
+        /// Lhs is condition
+        /// Rhs is chunk (block)
+        while_statement,
+
         cond_value,
         expression_list,
         unary_expression,
@@ -271,6 +281,21 @@ test "return_statement" {
         \\
     ,
         \\return 12, hi
+    );
+}
+
+test "while_statement" {
+    try testParser(
+        \\chunk
+        \\  while_statement
+        \\    literal
+        \\    chunk
+        \\      break_statement
+        \\
+    ,
+        \\while true do
+        \\    break
+        \\end
     );
 }
 

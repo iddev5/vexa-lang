@@ -33,6 +33,9 @@ pub fn main() !void {
         \\    j := true
         \\end
         \\return 12
+        \\while true do
+        \\    n := 12
+        \\end
     ;
 
     var diag: Diagnostics = undefined;

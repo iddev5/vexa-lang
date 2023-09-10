@@ -9,8 +9,12 @@ pub const Module = struct {
 };
 
 pub const Opcode = enum(u8) {
+    block = 0x02,
+    loop = 0x03,
     if_op = 0x04,
     else_op = 0x05,
+    br = 0x0c,
+    br_if = 0x0d,
     ret = 0x0f,
     local_get = 0x20,
     local_set = 0x21,
@@ -18,6 +22,7 @@ pub const Opcode = enum(u8) {
     global_set = 0x24,
     i32_const = 0x41,
     f64_const = 0x44,
+    i32_eqz = 0x45,
     i32_eq = 0x46,
     i32_ne = 0x47,
     f64_eq = 0x61,
@@ -243,6 +248,7 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .global_set => try gen.emitGlobal(writer, inst),
         .ret => try gen.emitRet(writer, inst),
         .cond => try gen.emitCond(writer, inst),
+        .loop => try gen.emitLoop(writer, inst),
         .block_do => |block| try gen.emitBlock(writer, gen.ir.instructions[block].block),
         else => {},
     }
@@ -287,6 +293,28 @@ fn emitCond(gen: *WasmGen, writer: anytype, inst: usize) !void {
     }
 
     try gen.emitOpcode(writer, .end);
+}
+
+fn emitLoop(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const inst_obj = gen.ir.instructions[inst].loop;
+
+    try gen.emitOpcode(writer, .block);
+    try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
+    try gen.emitOpcode(writer, .loop);
+    try leb.writeULEB128(writer, @as(u8, @intCast(0x40))); // TODO: fix mess
+
+    try gen.emitExpr(writer, inst_obj.cond);
+    try gen.emitOpcode(writer, .i32_eqz);
+    try gen.emitOpcode(writer, .br_if);
+    try leb.writeULEB128(writer, @as(u32, 1));
+
+    try gen.emitOpcode(writer, .br);
+    try leb.writeULEB128(writer, @as(u32, 0));
+
+    try gen.emitBlock(writer, gen.ir.instructions[inst_obj.block].block);
+
+    for (0..2) |_|
+        try gen.emitOpcode(writer, .end);
 }
 
 fn emitBinOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.BinaryOp) !void {

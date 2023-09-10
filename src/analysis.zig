@@ -127,6 +127,7 @@ const Analyzer = struct {
             .return_statement => return try anl.genReturn(node),
             .do_statement => return try anl.genDoStat(node),
             .if_statement => return try anl.genIfStat(node),
+            .while_statement => return try anl.genWhileStat(node),
             else => {},
         }
         unreachable;
@@ -262,6 +263,15 @@ const Analyzer = struct {
         anl.instructions.items[cond] = stat;
 
         return cond;
+    }
+
+    fn genWhileStat(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const node_val = anl.tree.nodes.get(node);
+
+        return try anl.addInst(.{ .loop = .{
+            .cond = try anl.genExpression(node_val.lhs),
+            .block = try anl.genBlock(node_val.rhs),
+        } });
     }
 
     fn getType(anl: *Analyzer, node: Node.Index) Air.ValueType {

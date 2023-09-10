@@ -50,6 +50,10 @@ pub const Inst = union(enum) {
         result: Index,
         else_blk: Index,
     },
+    loop: struct {
+        cond: Index,
+        block: Index,
+    },
     block: Block,
     block_do: Index,
     stmt: void,
