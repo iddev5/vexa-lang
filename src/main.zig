@@ -62,10 +62,8 @@ pub fn main() !void {
 
     defer air.deinit();
 
-    var gen = WasmGen{
-        .allocator = allocator,
-        .ir = &air,
-    };
+    var gen = WasmGen{ .allocator = allocator, .ir = &air };
+    defer gen.deinit();
 
     _ = try gen.emit(stdout);
 }
@@ -74,4 +72,5 @@ comptime {
     _ = @import("Tokenizer.zig");
     _ = @import("Ast.zig");
     _ = @import("analysis.zig");
+    _ = @import("WasmGen.zig");
 }

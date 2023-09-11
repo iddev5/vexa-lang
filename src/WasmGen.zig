@@ -108,13 +108,18 @@ pub const Export = enum(u8) {
     func = 0x00,
 };
 
+const module_header = [_]u8{ 0x00, 0x61, 0x73, 0x6d };
+const module_version = [_]u8{ 0x01, 0x00, 0x00, 0x00 };
+
 allocator: std.mem.Allocator,
 ir: *Air,
 sections: [12]Section = undefined,
 num_sections: usize = 0,
 
-const module_header = [_]u8{ 0x00, 0x61, 0x73, 0x6d };
-const module_version = [_]u8{ 0x01, 0x00, 0x00, 0x00 };
+pub fn deinit(gen: *WasmGen) void {
+    for (gen.sections[0..gen.num_sections]) |*sec|
+        sec.deinit();
+}
 
 fn section(gen: *WasmGen, ty: Section.Type) *Section {
     for (&gen.sections) |*sec|
@@ -499,4 +504,59 @@ fn buildOpcode(op: Air.InstType, ty: WasmType) Opcode {
         },
         else => unreachable,
     };
+}
+
+const Ast = @import("Ast.zig");
+const analysis = @import("analysis.zig");
+
+fn testWasm(comptime expected_wasm: []const u8, source: [:0]const u8) !void {
+    var tree = try Ast.parse(std.testing.allocator, source, null);
+    defer tree.deinit();
+
+    var air = try analysis.gen(&tree, null);
+    defer air.deinit();
+
+    var gen = WasmGen{ .allocator = std.testing.allocator, .ir = &air };
+    defer gen.deinit();
+
+    var buf: [2048]u8 = undefined;
+    var stream = std.io.fixedBufferStream(buf[0..]);
+    _ = try gen.emit(stream.writer());
+
+    const final_expected = module_header ++ module_version ++ expected_wasm;
+    try std.testing.expectEqualSlices(u8, final_expected, stream.getWritten());
+}
+
+fn testMain(comptime expected_wasm: []const u8, source: [:0]const u8) !void {
+    const main_only =
+        "\x01\x04\x01\x60\x00\x00" ++
+        "\x03\x02\x01\x00";
+
+    try testWasm(main_only ++ expected_wasm, source);
+}
+
+const export_main = "\x07\x0b\x01\x07\x5f\x5f\x73\x74\x61\x72\x74\x00\x00";
+
+test "simple assign" {
+    try testMain("\x06\x0d\x01\x7c\x01\x44\x00\x00\x00\x00\x00\x00\x00\x00\x0b" ++
+        export_main ++
+        "\x0a\x0f\x01\x0d\x00\x44\x00\x00\x00\x00\x00\x00\x28\x40\x24\x00\x0b",
+        \\i := 12
+    );
+}
+
+test "assign with expr" {
+    try testMain("\x06\x0d\x01\x7c\x01\x44\x00\x00\x00\x00\x00\x00\x00\x00\x0b" ++
+        export_main ++
+        "\x0a\x10\x01\x0e\x00\x44\x00\x00\x00\x00\x00\x80\x46\x40\x9a\x24\x00\x0b",
+        \\i := -45
+    );
+
+    try testMain("\x06\x0d\x01\x7c\x01\x44\x00\x00\x00\x00\x00\x00\x00\x00\x0b" ++
+        export_main ++
+        "\x0a\x2d\x01\x2b\x00\x44\x00\x00\x00\x00\x00\x00\x28\x40\x44\x00\x00\x00" ++
+        "\x00\x00\x00\x41\x40\xa2\x44\x00\x00\x00\x00\x00\x80\x46\x40\x44\x00\x00" ++
+        "\x00\x00\x00\x80\x56\x40\xa3\xa0\x24\x00\x0b",
+        \\i := 12 * 34 + 45 / 90
+    );
 }

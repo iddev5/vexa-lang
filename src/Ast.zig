@@ -129,11 +129,11 @@ fn testParser(expected_ast_dump: []const u8, source: [:0]const u8) !void {
 }
 
 fn testParserError(source: [:0]const u8, expected_error: []const u8) !void {
-    var diag: Diagnostics = undefined;
-    defer diag.deinit(std.testing.allocator);
+    var diag: Diagnostics = .{ .allocator = std.testing.allocator, .source = source };
+    defer diag.deinit();
     var tree = Ast.parse(std.testing.allocator, source, &diag) catch |err| switch (err) {
         error.ParsingFailed => {
-            try std.testing.expectEqualStrings(expected_error, diag.message);
+            try std.testing.expectEqualStrings(expected_error, diag.errors.items[0].message);
             return;
         },
         else => |e| return e,
