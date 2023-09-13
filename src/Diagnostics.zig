@@ -15,6 +15,7 @@ pub const ErrorTag = enum {
     undecl_ident,
     expected_ty,
     invalid_stmt,
+    unpack_error,
 
     pub fn getMessage(tag: ErrorTag) []const u8 {
         return switch (tag) {
@@ -26,6 +27,7 @@ pub const ErrorTag = enum {
             .undecl_ident => "use of undeclared identifier '{s}'",
             .expected_ty => "expected value of type '{s}', found '{s}'",
             .invalid_stmt => "invalid statement found",
+            .unpack_error => "not enough values to unpack, expected {d}, found {d}",
         };
     }
 };

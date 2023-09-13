@@ -162,18 +162,59 @@ const Analyzer = struct {
         return result;
     }
 
-    fn genDeclaration(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn GenAssignCommon(comptime func: anytype) fn (*Analyzer, Node.Index) Error!Inst.Index {
+        return struct {
+            fn f(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
+                const node_val = anl.tree.nodes.get(node);
+                const ident_list = anl.tree.nodes.get(node_val.lhs);
+
+                if (ident_list.tag == .expression_list) {
+                    const locs = anl.tree.tokens.items(.loc);
+                    const num_ident = ident_list.rhs - ident_list.lhs;
+                    const expr_list = anl.tree.nodes.get(node_val.rhs);
+                    const num_expr = expr_list.rhs - expr_list.lhs;
+
+                    if (expr_list.tag != .expression_list) {
+                        // TODO: it could also be an iterable but those havent yet been implemented
+                        unreachable;
+                    }
+
+                    if (num_ident > num_expr) {
+                        try anl.emitError(locs[ident_list.main_token], .unpack_error, .{ num_ident, num_expr });
+                        return error.AnalysisFailed;
+                    }
+
+                    const main_tokens = anl.tree.nodes.items(.main_token);
+                    var first_decl: ?Inst.Index = 0;
+
+                    var i: usize = 0;
+                    while (i < num_ident) : (i += 1) {
+                        const ident = anl.tree.extras[ident_list.lhs + i];
+                        const expr = anl.tree.extras[expr_list.lhs + i];
+
+                        const decl = try func(anl, main_tokens[ident], expr);
+                        first_decl = first_decl orelse decl;
+                    }
+                    return first_decl.?;
+                }
+
+                return try func(anl, ident_list.main_token, node_val.rhs);
+            }
+        }.f;
+    }
+
+    const genDeclaration = GenAssignCommon(makeDeclaration);
+    const genAssignment = GenAssignCommon(makeAssignment);
+
+    fn makeDeclaration(anl: *Analyzer, ident: Token.Index, value_node: Inst.Index) !Inst.Index {
         const locs = anl.tree.tokens.items(.loc);
-        const node_val = anl.tree.nodes.get(node);
-        const ident_list = anl.tree.nodes.get(node_val.lhs);
-        // TODO: use all identifiers
-        const ident = anl.tree.tokens.get(ident_list.main_token).slice(anl.tree.source);
-        const value = try anl.genExpression(node_val.rhs);
+        const slice = anl.tree.tokens.get(ident).slice(anl.tree.source);
+        const value = try anl.genExpression(value_node);
 
         if (anl.current_scope.?.parent == null) {
-            var result = try anl.globals.getOrPut(anl.allocator, ident);
+            var result = try anl.globals.getOrPut(anl.allocator, slice);
             if (result.found_existing) {
-                try anl.emitError(locs[ident_list.main_token], .redecl_global, .{ident});
+                try anl.emitError(locs[ident], .redecl_global, .{slice});
             }
 
             result.value_ptr.* = anl.getType(value);
@@ -185,36 +226,33 @@ const Analyzer = struct {
         }
 
         // Check if the symbol already exists
-        if (anl.getSymbol(anl.current_scope.?, ident) != null) {
-            try anl.emitError(locs[ident_list.main_token], .redecl_local, .{ident});
+        if (anl.getSymbol(anl.current_scope.?, slice) != null) {
+            try anl.emitError(locs[ident], .redecl_local, .{slice});
         }
 
         // Find nearest function scope
         var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
         try scope.types.append(anl.allocator, anl.getType(value));
         const index = @as(u16, @intCast(scope.types.items.len)) - 1;
-        try anl.current_scope.?.locals.putNoClobber(anl.allocator, ident, index);
+        try anl.current_scope.?.locals.putNoClobber(anl.allocator, slice, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
         return try anl.addInst(.{ .local_set = payload });
     }
 
-    fn genAssignment(anl: *Analyzer, node: Node.Index) !Inst.Index {
+    fn makeAssignment(anl: *Analyzer, ident: Token.Index, value_node: Inst.Index) !Inst.Index {
         const locs = anl.tree.tokens.items(.loc);
-        const node_val = anl.tree.nodes.get(node);
-        const ident_list = anl.tree.nodes.get(node_val.lhs);
-        // TODO: use all identifiers
-        const ident = anl.tree.tokens.get(ident_list.main_token).slice(anl.tree.source);
-        const value = try anl.genExpression(node_val.rhs);
+        const slice = anl.tree.tokens.get(ident).slice(anl.tree.source);
+        const value = try anl.genExpression(value_node);
 
-        const symbol = anl.getSymbol(anl.current_scope.?, ident) orelse {
-            try anl.emitError(locs[ident_list.main_token], .undecl_ident, .{ident});
+        const symbol = anl.getSymbol(anl.current_scope.?, slice) orelse {
+            try anl.emitError(locs[ident], .undecl_ident, .{slice});
             return error.AnalysisFailed;
         };
 
         const val_ty = anl.getType(value);
         if (symbol.ty != val_ty) {
-            const main_token = anl.tree.nodes.items(.main_token)[node_val.rhs];
+            const main_token = anl.tree.nodes.items(.main_token)[value_node];
             try anl.emitError(locs[main_token], .expected_ty, .{ @tagName(symbol.ty), @tagName(val_ty) });
         }
 
@@ -225,7 +263,6 @@ const Analyzer = struct {
 
         return try anl.addInst(.{ .local_set = payload });
     }
-
     fn genReturn(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const lhs_idx = anl.tree.nodes.items(.lhs)[node];
         const lhs = anl.tree.nodes.get(lhs_idx);

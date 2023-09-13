@@ -251,6 +251,7 @@ fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Err
     return struct {
         fn f(parser: *Parser) !Node.Index {
             const tags = parser.tokens.items(.tag);
+            const first_tok = parser.tok_index;
 
             var expr_list: std.ArrayListUnmanaged(Node.Index) = .{};
             defer expr_list.deinit(parser.allocator);
@@ -270,7 +271,7 @@ fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Err
 
                 return parser.addNode(.{
                     .tag = .expression_list,
-                    .main_token = 0,
+                    .main_token = first_tok,
                     .lhs = @as(u32, @intCast(parser.extras.items.len)) - i,
                     .rhs = @intCast(parser.extras.items.len),
                 });

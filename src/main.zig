@@ -10,10 +10,9 @@ pub fn main() !void {
     const stderr = std.io.getStdErr().writer();
 
     const source =
-        \\hi := -1 + 2 * 3 / 4
-        \\i := true == true
+        \\hi, i := -1 + 2 * 3 / 4, true == true
         \\if true == true then
-        \\    hi = 67 / 22 + hi
+        \\    i, hi = true == false, 67 / 22 + hi
         \\end
         \\if false then
         \\    return false
