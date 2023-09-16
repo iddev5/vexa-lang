@@ -100,9 +100,8 @@ fn parseStatement(parser: *Parser) !Node.Index {
         .keyword_if => return try parser.parseIfStatement(),
         .keyword_return => return try parser.parseRetStatement(),
         .keyword_while => return try parser.parseWhileStatement(),
-        .keyword_for,
-        .keyword_function,
-        => unreachable,
+        .keyword_function => return try parser.parseFunction(),
+        .keyword_for => unreachable,
         .keyword_break => {
             parser.tok_index += 1;
             return try parser.addNode(.{
@@ -204,6 +203,65 @@ fn parseWhileStatement(parser: *Parser) !Node.Index {
         .lhs = cond,
         .rhs = chunk,
     });
+}
+
+fn parseFunction(parser: *Parser) !Node.Index {
+    // Ignore the 'function' keyword
+    parser.tok_index += 1;
+
+    const main_token = parser.tok_index;
+    const symbol = try parser.parseIdent();
+
+    return try parser.addNode(.{
+        .tag = .declaration,
+        .main_token = main_token,
+        .lhs = symbol,
+        .rhs = try parser.parseFunctionDefn(),
+    });
+}
+
+fn parseFunctionType(parser: *Parser) !Node.Index {
+    try parser.expectToken(.l_paren);
+
+    const ident = try parser.expectIdent();
+    try parser.expectToken(.colon);
+    const ty = try parser.parseType();
+
+    // TODO: param list
+    const param = try parser.addNode(.{
+        .tag = .function_param,
+        .main_token = undefined,
+        .lhs = ident,
+        .rhs = ty,
+    });
+
+    try parser.expectToken(.r_paren);
+
+    const return_type = try parser.parseType();
+    return try parser.addNode(.{
+        .tag = .function_type,
+        .main_token = undefined,
+        .lhs = param,
+        .rhs = return_type,
+    });
+}
+
+fn parseFunctionDefn(parser: *Parser) !Node.Index {
+    const fn_type = try parser.parseFunctionType();
+    const body = try parser.parseChunk();
+    try parser.expectToken(.keyword_end);
+
+    return try parser.addNode(.{
+        .tag = .function_defn,
+        .main_token = undefined,
+        .lhs = fn_type,
+        .rhs = body,
+    });
+}
+
+fn parseType(parser: *Parser) !Node.Index {
+    // TODO: type names might be more complicated
+    return try parser.expectIdent();
 }
 
 fn parseExprOrStmt(parser: *Parser) !Node.Index {

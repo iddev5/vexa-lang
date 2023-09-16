@@ -85,6 +85,21 @@ pub const Node = struct {
         /// Rhs is chunk (block)
         while_statement,
 
+        /// Main token is undefined
+        /// Lhs is function_param
+        /// Rhs is return type
+        function_type,
+
+        /// Main token is undefined
+        /// Lhs is symbol name (identifier)
+        /// Rhs is type name
+        function_param,
+
+        /// Main token is undefined
+        /// Lhs is function_type
+        /// Rhs is chunk (block)
+        function_defn,
+
         cond_value,
         expression_list,
         unary_expression,
@@ -403,6 +418,27 @@ test "multi assignment" {
         \\
     ,
         \\hello, hii = 19, hi, true
+    );
+}
+
+test "function" {
+    try testParser(
+        \\chunk
+        \\  declaration
+        \\    identifier
+        \\    function_defn
+        \\      function_type
+        \\        function_param
+        \\          identifier
+        \\          identifier
+        \\        identifier
+        \\      chunk
+        \\        break_statement
+        \\
+    ,
+        \\function hello(i: float) float
+        \\    break
+        \\end
     );
 }
 

@@ -20,12 +20,18 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
     defer scope.deinit(allocator);
     const start_inst = try anl.genChunk(0, scope);
 
+    const main_fn_type = try anl.addInst(.{ .func_type = .{
+        .params = &.{},
+        .result = &.{},
+    } });
+
     return .{
         .allocator = allocator,
         .start_inst = start_inst,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .globals = try allocator.dupe(Air.ValueType, anl.globals.entries.items(.value)),
         .locals = try scope.types.toOwnedSlice(allocator),
+        .main_fn_type = main_fn_type,
     };
 }
 
@@ -217,6 +223,11 @@ const Analyzer = struct {
                 try anl.emitError(locs[ident], .redecl_global, .{slice});
             }
 
+            // If its a function, just return the index and exit early
+            if (anl.instructions.items[value] == .func) {
+                return value;
+            }
+
             result.value_ptr.* = anl.getType(value);
             const index = @as(u16, @intCast(anl.globals.count())) - 1;
             return try anl.addInst(.{ .global_set = .{
@@ -233,6 +244,7 @@ const Analyzer = struct {
         // Find nearest function scope
         var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
         try scope.types.append(anl.allocator, anl.getType(value));
+
         const index = @as(u16, @intCast(scope.types.items.len)) - 1;
         try anl.current_scope.?.locals.putNoClobber(anl.allocator, slice, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
@@ -322,6 +334,7 @@ const Analyzer = struct {
             .nop => .void,
             .float => .float,
             .bool => .bool,
+            .func => .func,
             inline else => |field| {
                 switch (@typeInfo(@TypeOf(field))) {
                     .Struct => if (@hasField(@TypeOf(field), "result_ty")) {
@@ -338,6 +351,7 @@ const Analyzer = struct {
     fn genExpression(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
+            .function_defn => return try anl.genFunction(node),
             .binary_expression => return try anl.genBinaryExpr(node),
             .unary_expression => return try anl.genUnaryExpr(node),
             .literal => return try anl.genLiteral(node),
@@ -345,6 +359,37 @@ const Analyzer = struct {
             else => return try anl.addInst(.{ .nop = {} }),
         }
         unreachable;
+    }
+
+    fn genFunction(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const node_val = anl.tree.nodes.get(node);
+        const fn_type = try anl.genFunctionType(node_val.rhs);
+
+        var scope = try Scope.init(anl.allocator, .func, anl.current_scope.?);
+        defer scope.deinit(anl.allocator);
+        const start_inst = try anl.genChunk(node_val.rhs, scope);
+
+        return try anl.addInst(.{ .func = .{
+            .fn_type = fn_type,
+            .start_inst = start_inst,
+            .inst_len = @intCast(anl.instructions.items.len - start_inst),
+            .locals = try scope.types.toOwnedSlice(anl.allocator),
+        } });
+    }
+
+    fn genFunctionType(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        _ = node;
+        // const node_val = anl.tree.nodes.get(node);
+        // const main_tokens = anl.tree.nodes.items(.main_token);
+        // const tokens = anl.tree.tokens;
+        // TODO: need a better type parsing system
+        // const param = tokens.get(main_tokens[node_val.lhs]).slice(anl.tree.source);
+        // const result = tokens.get(main_tokens[node_val.rhs]).slice(anl.tree.source);
+
+        return try anl.addInst(.{ .func_type = .{
+            .params = &.{.float},
+            .result = &.{.float},
+        } });
     }
 
     fn genBinaryExpr(anl: *Analyzer, node: Node.Index) !Inst.Index {

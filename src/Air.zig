@@ -7,11 +7,13 @@ start_inst: u32,
 instructions: []const Inst,
 globals: []const ValueType,
 locals: []const ValueType,
+main_fn_type: Inst.Index,
 
 pub const ValueType = enum {
     void,
     bool,
     float,
+    func,
 };
 
 pub fn deinit(air: *Air) void {
@@ -44,6 +46,7 @@ pub const Inst = union(enum) {
         result_ty: ValueType,
         value: Index,
     },
+    func_type: FunctionType,
     func: Function,
     cond: struct {
         cond: Index,
@@ -77,12 +80,16 @@ pub const Inst = union(enum) {
         value: Index,
     };
 
+    pub const FunctionType = struct {
+        params: []const ValueType,
+        result: []const ValueType,
+    };
+
     pub const Function = struct {
+        fn_type: Inst.Index,
         start_inst: u32,
         inst_len: u32,
         locals: []const ValueType,
-        params: []const ValueType,
-        result: []const ValueType,
     };
 
     pub const Block = struct {

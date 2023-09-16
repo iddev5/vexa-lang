@@ -10,36 +10,39 @@ pub fn main() !void {
     const stderr = std.io.getStdErr().writer();
 
     const source =
-        \\hi, i := -1 + 2 * 3 / 4, true == true
-        \\if true == true then
-        \\    i, hi = true == false, 67 / 22 + hi
-        \\end
-        \\if false then
-        \\    return false
-        \\elseif true then
-        \\    return true
-        \\else
-        \\    m := 12
-        \\    if true then
-        \\        m = m * 2
-        \\        return true
-        \\    else
-        \\        return false
-        \\    end
-        \\    return 10
-        \\end
-        \\do
-        \\    m := true
-        \\end
-        \\return 12
-        \\while true do
-        \\    if i == false then
-        \\        break
-        \\    end
-        \\    m := true
-        \\    do
-        \\        m = false
-        \\    end
+        // \\hi, i := -1 + 2 * 3 / 4, true == true
+        // \\if true == true then
+        // \\    i, hi = true == false, 67 / 22 + hi
+        // \\end
+        // \\if false then
+        // \\    return false
+        // \\elseif true then
+        // \\    return true
+        // \\else
+        // \\    m := 12
+        // \\    if true then
+        // \\        m = m * 2
+        // \\        return true
+        // \\    else
+        // \\        return false
+        // \\    end
+        // \\    return 10
+        // \\end
+        // \\do
+        // \\    m := true
+        // \\end
+        // \\return 12
+        // \\while true do
+        // \\    if i == false then
+        // \\        break
+        // \\    end
+        // \\    m := true
+        // \\    do
+        // \\        m = false
+        // \\    end
+        // \\end
+        \\function abc(m: float) float
+        \\    return 0
         \\end
     ;
 

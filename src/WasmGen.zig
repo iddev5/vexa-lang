@@ -137,6 +137,7 @@ fn resolveValueType(gen: *WasmGen, ty: Air.ValueType) WasmType {
         .void => unreachable,
         .bool => .i32,
         .float => .f64,
+        .func => .i32,
     };
 }
 
@@ -163,11 +164,10 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
 
     // Entry point: implicit main function
     try gen.emitFunc(.{
+        .fn_type = gen.ir.main_fn_type,
         .start_inst = gen.ir.start_inst,
         .inst_len = @intCast(gen.ir.instructions.len - gen.ir.start_inst),
         .locals = gen.ir.locals,
-        .params = &.{},
-        .result = &.{},
     });
 
     const func_section = gen.section(.func);
@@ -184,6 +184,16 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
     try gen.emitEnum(export_writer, Export.func);
     try gen.emitUnsigned(export_writer, main_index);
 
+    // Emit all other functions present
+    for (gen.ir.instructions[0..]) |inst| {
+        switch (inst) {
+            .func => |func| try gen.emitFunc(func),
+            else => {},
+        }
+    }
+
+    // Sort all the sections according to the order wasm accepts. Refer to Section enum
+    // for order along with section code
     std.sort.insertion(Section, gen.sections[0..gen.num_sections], {}, sortSections);
 
     for (gen.sections[0..gen.num_sections]) |sec|
@@ -203,6 +213,8 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     // TODO: approximate initial size
     var func_code = std.ArrayList(u8).init(gen.allocator);
     defer func_code.deinit();
+
+    const func_type = gen.ir.instructions[func.fn_type].func_type;
 
     var func_code_writer = func_code.writer();
 
@@ -224,12 +236,12 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
     const type_writer = type_section.code.writer();
     try gen.emitEnum(type_writer, WasmType.func);
 
-    try gen.emitUnsigned(type_writer, @as(u32, @intCast(func.params.len)));
-    for (func.params) |param|
+    try gen.emitUnsigned(type_writer, @as(u32, @intCast(func_type.params.len)));
+    for (func_type.params) |param|
         try type_writer.writeByte(@intFromEnum(gen.resolveValueType(param)));
 
-    try gen.emitUnsigned(type_writer, @as(u32, @intCast(func.result.len)));
-    for (func.result) |result|
+    try gen.emitUnsigned(type_writer, @as(u32, @intCast(func_type.result.len)));
+    for (func_type.result) |result|
         try type_writer.writeByte(@intFromEnum(gen.resolveValueType(result)));
 
     // Function entry
