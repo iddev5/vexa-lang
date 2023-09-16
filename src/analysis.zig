@@ -367,12 +367,25 @@ const Analyzer = struct {
 
         var scope = try Scope.init(anl.allocator, .func, anl.current_scope.?);
         defer scope.deinit(anl.allocator);
-        const start_inst = try anl.genChunk(node_val.rhs, scope);
+
+        const block = try anl.addInst(.{ .block = .{
+            .start_inst = 0,
+            .inst_len = 0,
+        } });
+
+        const start_inst: u32 = @intCast(anl.instructions.items.len);
+        _ = try anl.genChunk(node_val.rhs, scope);
+
+        var block_inst = anl.instructions.items[block].block;
+        block_inst.start_inst = start_inst;
+        block_inst.inst_len = @intCast(anl.instructions.items.len - start_inst);
+
+        anl.instructions.items[block].block = block_inst;
 
         return try anl.addInst(.{ .func = .{
             .fn_type = fn_type,
-            .start_inst = start_inst,
-            .inst_len = @intCast(anl.instructions.items.len - start_inst),
+            .start_inst = block_inst.start_inst,
+            .inst_len = block_inst.inst_len,
             .locals = try scope.types.toOwnedSlice(anl.allocator),
         } });
     }
