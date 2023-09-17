@@ -271,10 +271,6 @@ fn emitBlock(gen: *WasmGen, writer: anytype, block: Air.Inst.Block) !void {
                 inst_index += blk.inst_len;
                 continue;
             },
-            .func => |fun| {
-                inst_index += fun.inst_len;
-                continue;
-            },
             else => {},
         }
 

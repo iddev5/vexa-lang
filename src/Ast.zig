@@ -440,6 +440,40 @@ test "function" {
         \\    break
         \\end
     );
+
+    try testParser(
+        \\chunk
+        \\  declaration
+        \\    identifier
+        \\    function_defn
+        \\      function_type
+        \\        function_param
+        \\          identifier
+        \\          identifier
+        \\        identifier
+        \\      chunk
+        \\        declaration
+        \\          identifier
+        \\          function_defn
+        \\            function_type
+        \\              function_param
+        \\                identifier
+        \\                identifier
+        \\              identifier
+        \\            chunk
+        \\              return_statement
+        \\                literal
+        \\        return_statement
+        \\          literal
+        \\
+    ,
+        \\function abc(i: float) float
+        \\    function def(j: float) float
+        \\        return 10
+        \\    end
+        \\    return 20
+        \\end
+    );
 }
 
 test "assignment error" {

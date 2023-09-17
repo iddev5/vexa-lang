@@ -571,6 +571,7 @@ test "binary op" {
         \\mul
         \\add
         \\global_set
+        \\func_type
         \\
     ,
         \\x := 10 + 20 * 2;
