@@ -45,6 +45,8 @@ const Symbol = struct {
     ty: Air.ValueType,
     scope: *Scope,
 
+    const invalid = std.math.maxInt(u16);
+
     fn isGlobal(sym: Symbol) bool {
         return sym.scope.ty == .global;
     }
@@ -174,7 +176,7 @@ const Analyzer = struct {
 
                 return .{
                     .id = @intCast(index),
-                    .ty = nearest_func.types.items[index],
+                    .ty = if (index == Symbol.invalid) .void else nearest_func.types.items[index],
                     .scope = nearest_func,
                 };
             }
@@ -238,7 +240,6 @@ const Analyzer = struct {
     fn makeDeclaration(anl: *Analyzer, ident: Token.Index, value_node: Inst.Index) !Inst.Index {
         const locs = anl.tree.tokens.items(.loc);
         const slice = anl.tree.tokens.get(ident).slice(anl.tree.source);
-        const value = try anl.genExpression(value_node);
 
         // Check if the symbol already exists
         if (anl.getSymbol(anl.current_scope.?, slice)) |sym| {
@@ -255,13 +256,24 @@ const Analyzer = struct {
         else
             anl.current_scope.?.findNearest(.func) orelse unreachable;
 
+        // Insert a garbage index
+        // Function declarations are handled as declarations. This means that
+        // the body is one whole inst and the name is another. Without inserting
+        // a garbage index (i.e declaring the variable uninitialized), it would be
+        // possible to redeclare a variable or function with the same name as current
+        // function inside the current function.
+        // There are other use cases for it too, like struct fields having pointer
+        // to self, this needs to be handled somewhere else
+        try anl.current_scope.?.locals.putNoClobber(anl.allocator, slice, Symbol.invalid);
+
+        const value = try anl.genExpression(value_node);
         const value_ty = anl.getType(value);
         if (value_ty == .func)
             return value;
 
         try scope.types.append(anl.allocator, value_ty);
         const index = @as(u16, @intCast(scope.types.items.len)) - 1;
-        try anl.current_scope.?.locals.putNoClobber(anl.allocator, slice, index);
+        anl.current_scope.?.locals.putAssumeCapacity(slice, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
         if (scope.ty == .global)
