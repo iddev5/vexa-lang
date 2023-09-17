@@ -8,10 +8,15 @@ const Token = @import("Tokenizer.zig").Token;
 
 pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
     const allocator = tree.allocator;
+
+    // Owned by analyzer
+    var global = try Scope.init(allocator, .global, null);
+
     var anl = Analyzer{
         .tree = tree,
         .allocator = allocator,
         .diag = diag,
+        .global_scope = global,
     };
     defer anl.deinit();
 
@@ -29,7 +34,7 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
         .allocator = allocator,
         .start_inst = start_inst,
         .instructions = try anl.instructions.toOwnedSlice(allocator),
-        .globals = try allocator.dupe(Air.ValueType, anl.globals.entries.items(.value)),
+        .globals = try global.types.toOwnedSlice(allocator),
         .locals = try scope.types.toOwnedSlice(allocator),
         .main_fn_type = main_fn_type,
     };
@@ -38,7 +43,11 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
 const Symbol = struct {
     id: u16,
     ty: Air.ValueType,
-    global: bool,
+    scope: *Scope,
+
+    fn isGlobal(sym: Symbol) bool {
+        return sym.scope.ty == .global;
+    }
 };
 
 const Scope = struct {
@@ -47,7 +56,7 @@ const Scope = struct {
     locals: std.StringArrayHashMapUnmanaged(usize) = .{},
     types: std.ArrayListUnmanaged(Air.ValueType) = .{},
 
-    const Type = enum { func, other };
+    const Type = enum { global, func, other };
 
     pub fn init(allocator: std.mem.Allocator, ty: Type, parent: ?*Scope) !*Scope {
         var scope = try allocator.create(Scope);
@@ -62,7 +71,12 @@ const Scope = struct {
     }
 
     pub fn findNearest(scope: *Scope, ty: Type) ?*Scope {
-        return if (scope.ty == ty) scope else if (scope.parent) |par| par.findNearest(ty) else null;
+        return if (scope.ty == ty or scope.ty == .global)
+            scope
+        else if (scope.parent) |par|
+            par.findNearest(ty)
+        else
+            null;
     }
 };
 
@@ -71,14 +85,14 @@ const Analyzer = struct {
     allocator: std.mem.Allocator,
     diag: ?*Diagnostics,
     instructions: std.ArrayListUnmanaged(Inst) = .{},
-    globals: std.StringArrayHashMapUnmanaged(Air.ValueType) = .{},
     current_scope: ?*Scope = null,
+    global_scope: *Scope,
 
     const Error = std.mem.Allocator.Error || error{AnalysisFailed};
 
     fn deinit(anl: *Analyzer) void {
         anl.instructions.deinit(anl.allocator);
-        anl.globals.deinit(anl.allocator);
+        anl.global_scope.deinit(anl.allocator);
         if (anl.current_scope) |scope| {
             scope.deinit(anl.allocator);
         }
@@ -147,25 +161,34 @@ const Analyzer = struct {
     }
 
     fn getSymbol(anl: *Analyzer, scope: *Scope, symbol: []const u8) ?Symbol {
-        var result = Symbol{ .id = 0, .ty = .void, .global = false };
-
         var check_scope = scope;
         while (true) {
             if (check_scope.locals.get(symbol)) |index| {
-                const nearest_func = check_scope.findNearest(.func).?;
-                result.id = @intCast(index);
-                result.ty = nearest_func.types.items[index];
-                return result;
+                // If the parent of checked scope doesnt exists, its the scope
+                // of the main function, so look up the symbol type in the global
+                // scope instead
+                const nearest_func = if (check_scope.parent == null)
+                    anl.global_scope
+                else
+                    check_scope.findNearest(.func).?;
+
+                return .{
+                    .id = @intCast(index),
+                    .ty = nearest_func.types.items[index],
+                    .scope = nearest_func,
+                };
             }
 
-            check_scope = check_scope.parent orelse break;
+            // If its global scope, we have already reached the end of chai
+            // otherwise check in parent scope, if there's no parent scope
+            // finally check in the global scope
+            check_scope = if (check_scope.ty == .global)
+                break
+            else
+                check_scope.parent orelse anl.global_scope;
         }
 
-        result.id = @intCast(anl.globals.getIndex(symbol) orelse return null);
-        result.ty = anl.globals.get(symbol) orelse unreachable;
-        result.global = true;
-
-        return result;
+        return null;
     }
 
     fn GenAssignCommon(comptime func: anytype) fn (*Analyzer, Node.Index) Error!Inst.Index {
@@ -217,37 +240,32 @@ const Analyzer = struct {
         const slice = anl.tree.tokens.get(ident).slice(anl.tree.source);
         const value = try anl.genExpression(value_node);
 
-        if (anl.current_scope.?.parent == null) {
-            var result = try anl.globals.getOrPut(anl.allocator, slice);
-            if (result.found_existing) {
-                try anl.emitError(locs[ident], .redecl_global, .{slice});
-            }
-
-            // If its a function, just return the index and exit early
-            if (anl.instructions.items[value] == .func) {
-                return value;
-            }
-
-            result.value_ptr.* = anl.getType(value);
-            const index = @as(u16, @intCast(anl.globals.count())) - 1;
-            return try anl.addInst(.{ .global_set = .{
-                .index = index,
-                .value = value,
-            } });
-        }
-
         // Check if the symbol already exists
-        if (anl.getSymbol(anl.current_scope.?, slice) != null) {
-            try anl.emitError(locs[ident], .redecl_local, .{slice});
+        if (anl.getSymbol(anl.current_scope.?, slice)) |sym| {
+            if (sym.isGlobal())
+                try anl.emitError(locs[ident], .redecl_global, .{slice})
+            else
+                try anl.emitError(locs[ident], .redecl_local, .{slice});
+            return error.AnalysisFailed;
         }
 
         // Find nearest function scope
-        var scope = anl.current_scope.?.findNearest(.func) orelse unreachable;
-        try scope.types.append(anl.allocator, anl.getType(value));
+        var scope = if (anl.current_scope.?.parent == null)
+            anl.global_scope
+        else
+            anl.current_scope.?.findNearest(.func) orelse unreachable;
 
+        const value_ty = anl.getType(value);
+        if (value_ty == .func)
+            return value;
+
+        try scope.types.append(anl.allocator, value_ty);
         const index = @as(u16, @intCast(scope.types.items.len)) - 1;
         try anl.current_scope.?.locals.putNoClobber(anl.allocator, slice, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
+
+        if (scope.ty == .global)
+            return try anl.addInst(.{ .global_set = payload });
 
         return try anl.addInst(.{ .local_set = payload });
     }
@@ -270,11 +288,12 @@ const Analyzer = struct {
 
         const payload: Air.Inst.SetValue = .{ .index = symbol.id, .value = value };
 
-        if (symbol.global)
+        if (symbol.isGlobal())
             return try anl.addInst(.{ .global_set = payload });
 
         return try anl.addInst(.{ .local_set = payload });
     }
+
     fn genReturn(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const lhs_idx = anl.tree.nodes.items(.lhs)[node];
         const lhs = anl.tree.nodes.get(lhs_idx);
@@ -368,6 +387,7 @@ const Analyzer = struct {
         var scope = try Scope.init(anl.allocator, .func, anl.current_scope.?);
         defer scope.deinit(anl.allocator);
 
+        // TODO: add all params to list of locals
         const block = try anl.addInst(.{ .block = .{
             .start_inst = 0,
             .inst_len = 0,
@@ -400,8 +420,8 @@ const Analyzer = struct {
         // const result = tokens.get(main_tokens[node_val.rhs]).slice(anl.tree.source);
 
         return try anl.addInst(.{ .func_type = .{
-            .params = &.{.float},
-            .result = &.{.float},
+            .params = &.{},
+            .result = &.{},
         } });
     }
 
@@ -514,7 +534,7 @@ const Analyzer = struct {
         return try anl.addInst(.{ .ident = .{
             .index = symbol.id,
             .result_ty = symbol.ty,
-            .global = symbol.global,
+            .global = symbol.isGlobal(),
         } });
     }
 

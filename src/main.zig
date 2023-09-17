@@ -41,7 +41,14 @@ pub fn main() !void {
         // \\        m = false
         // \\    end
         // \\end
+        \\    m := 1
+        \\    n := false
         \\function abc(m: float) float
+        \\    function abc(n: float) float
+        \\        return 2
+        \\    end
+        \\    m = 22
+        \\    k := n
         \\    return 0
         \\end
     ;
