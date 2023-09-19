@@ -45,7 +45,7 @@ pub fn main() !void {
         \\n := false
         \\function abc(m: float) float
         \\    function def(n: float) float
-        \\        return 2
+        \\        return n
         \\    end
         \\    m = 10
         \\    k := n

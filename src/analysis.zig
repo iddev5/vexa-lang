@@ -12,11 +12,17 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
     // Owned by analyzer
     var global = try Scope.init(allocator, .global, null);
 
+    const main_fn_type: Air.Inst.FunctionType = .{
+        .params = &.{},
+        .result = &.{},
+    };
+
     var anl = Analyzer{
         .tree = tree,
         .allocator = allocator,
         .diag = diag,
         .global_scope = global,
+        .current_func = main_fn_type,
     };
     defer anl.deinit();
 
@@ -25,10 +31,7 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
     defer scope.deinit(allocator);
     const start_inst = try anl.genChunk(0, scope);
 
-    const main_fn_type = try anl.addInst(.{ .func_type = .{
-        .params = &.{},
-        .result = &.{},
-    } });
+    const main_fn_type_node = try anl.addInst(.{ .func_type = main_fn_type });
 
     return .{
         .allocator = allocator,
@@ -36,7 +39,7 @@ pub fn gen(tree: *Ast, diag: ?*Diagnostics) !Air {
         .instructions = try anl.instructions.toOwnedSlice(allocator),
         .globals = try global.types.toOwnedSlice(allocator),
         .locals = try scope.types.toOwnedSlice(allocator),
-        .main_fn_type = main_fn_type,
+        .main_fn_type = main_fn_type_node,
     };
 }
 
@@ -89,6 +92,7 @@ const Analyzer = struct {
     instructions: std.ArrayListUnmanaged(Inst) = .{},
     current_scope: ?*Scope = null,
     global_scope: *Scope,
+    current_func: Air.Inst.FunctionType,
 
     const Error = std.mem.Allocator.Error || error{AnalysisFailed};
 
@@ -272,7 +276,7 @@ const Analyzer = struct {
             return value;
 
         try scope.types.append(anl.allocator, value_ty);
-        const index = @as(u16, @intCast(scope.types.items.len)) - 1;
+        const index = @as(u16, @intCast(scope.types.items.len - anl.current_func.params.len)) - 1;
         anl.current_scope.?.locals.putAssumeCapacity(slice, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
@@ -392,14 +396,50 @@ const Analyzer = struct {
         unreachable;
     }
 
+    const builtin_types = std.ComptimeStringMap(Air.ValueType, .{
+        .{ "float", .float },
+        .{ "bool", .bool },
+        .{ "void", .void },
+    });
+
     fn genFunction(anl: *Analyzer, node: Node.Index) !Inst.Index {
         const node_val = anl.tree.nodes.get(node);
-        const fn_type = try anl.genFunctionType(node_val.rhs);
 
         var scope = try Scope.init(anl.allocator, .func, anl.current_scope.?);
         defer scope.deinit(anl.allocator);
 
-        // TODO: add all params to list of locals
+        const type_val = anl.tree.nodes.get(node_val.lhs);
+        const main_tokens = anl.tree.nodes.items(.main_token);
+        const tokens = anl.tree.tokens;
+
+        // Process result type
+        const result = tokens.get(main_tokens[type_val.rhs]).slice(anl.tree.source);
+        const result_ty = builtin_types.get(result) orelse unreachable;
+        try scope.types.append(anl.allocator, result_ty);
+        const num_results = scope.types.items.len;
+
+        // Process param name and type
+        const params = anl.tree.nodes.get(type_val.lhs);
+        const param_name = tokens.get(main_tokens[params.lhs]).slice(anl.tree.source);
+        const param_type = tokens.get(main_tokens[params.rhs]).slice(anl.tree.source);
+
+        try scope.types.append(anl.allocator, builtin_types.get(param_type) orelse unreachable);
+        try scope.locals.putNoClobber(anl.allocator, param_name, scope.types.items.len - num_results - 1);
+        const num_params_and_res = scope.types.items.len;
+
+        // Create the function type
+        const fn_type: Air.Inst.FunctionType = .{
+            .params = scope.types.items[num_results..],
+            .result = scope.types.items[0..num_results],
+        };
+
+        const fn_type_node = try anl.addInst(.{ .func_type = fn_type });
+
+        // Store the current function type
+        const current_fn = anl.current_func;
+        anl.current_func = fn_type;
+        defer anl.current_func = current_fn;
+
         const block = try anl.addInst(.{ .block = .{
             .start_inst = 0,
             .inst_len = 0,
@@ -415,10 +455,10 @@ const Analyzer = struct {
         anl.instructions.items[block].block = block_inst;
 
         return try anl.addInst(.{ .func = .{
-            .fn_type = fn_type,
+            .fn_type = fn_type_node,
             .start_inst = block_inst.start_inst,
             .inst_len = block_inst.inst_len,
-            .locals = try scope.types.toOwnedSlice(anl.allocator),
+            .locals = (try scope.types.toOwnedSlice(anl.allocator))[num_params_and_res..],
         } });
     }
 
