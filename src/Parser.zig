@@ -357,8 +357,30 @@ fn parseExpr(parser: *Parser) !Node.Index {
     return try parser.parseBinaryExpr(0);
 }
 
-fn parsePrimaryExpr(parser: *Parser) !Node.Index {
-    return try parser.parsePrefixExpr();
+fn parsePrimaryExpr(parser: *Parser) Error!Node.Index {
+    const primary = try parser.parsePrefixExpr();
+    const tags = parser.tokens.items(.tag);
+
+    switch (tags[parser.tok_index]) {
+        .l_paren => return try parser.addNode(.{
+            .tag = .function_call,
+            .main_token = undefined,
+            .lhs = primary,
+            .rhs = try parser.parseArguments(),
+        }),
+        else => {},
+    }
+
+    return primary;
+}
+
+fn parseArguments(parser: *Parser) !Node.Index {
+    // Ignore the '(' token
+    parser.tok_index += 1;
+    const args = try parser.parseExprOrList();
+    try parser.expectToken(.r_paren);
+
+    return args;
 }
 
 fn parsePrefixExpr(parser: *Parser) !Node.Index {

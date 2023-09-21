@@ -16,6 +16,7 @@ pub const Opcode = enum(u8) {
     br = 0x0c,
     br_if = 0x0d,
     ret = 0x0f,
+    call = 0x10,
     local_get = 0x20,
     local_set = 0x21,
     global_get = 0x23,
@@ -404,6 +405,7 @@ fn emitUnOp(gen: *WasmGen, writer: anytype, inst: usize, op: Air.Inst.UnaryOp) !
 
 fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
     switch (gen.ir.instructions[inst]) {
+        .call => try gen.emitCall(writer, inst),
         .bool => |info| try gen.emitBool(writer, info),
         .float => |info| try gen.emitFloat(writer, info),
         .ident => try gen.emitIdent(writer, inst),
@@ -421,6 +423,12 @@ fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .negate => |info| try gen.emitUnOp(writer, inst, info),
         else => unreachable,
     }
+}
+
+fn emitCall(gen: *WasmGen, writer: anytype, inst: usize) !void {
+    const call = gen.ir.instructions[inst].call;
+    try gen.emitOpcode(writer, .call);
+    try gen.emitUnsigned(writer, call.index);
 }
 
 fn emitBool(gen: *WasmGen, writer: anytype, val: bool) !void {

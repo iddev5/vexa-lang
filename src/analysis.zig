@@ -387,6 +387,7 @@ const Analyzer = struct {
         const tags = anl.tree.nodes.items(.tag);
         switch (tags[node]) {
             .function_defn => return try anl.genFunction(node),
+            .function_call => return try anl.genCall(node),
             .binary_expression => return try anl.genBinaryExpr(node),
             .unary_expression => return try anl.genUnaryExpr(node),
             .literal => return try anl.genLiteral(node),
@@ -475,6 +476,32 @@ const Analyzer = struct {
             .params = &.{},
             .result = &.{},
         } });
+    }
+
+    fn genCall(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        const node_val = anl.tree.nodes.get(node);
+        const main_tokens = anl.tree.nodes.items(.main_token);
+        const ident = anl.tree.tokens.get(main_tokens[node_val.lhs]).slice(anl.tree.source);
+        const args = anl.tree.nodes.get(node_val.rhs);
+
+        const symbol = anl.getSymbol(anl.current_scope.?, ident) orelse {
+            // TODO: error
+            return error.AnalysisFailed;
+        };
+        _ = symbol;
+
+        if (args.tag == .expression_list) {
+            var i = args.lhs;
+            while (i < args.rhs) : (i += 1) {
+                _ = try anl.genExpression(anl.tree.extras[i]);
+            }
+        } else {
+            _ = try anl.genExpression(node_val.rhs);
+        }
+
+        return try anl.addInst(.{
+            .call = .{ .index = 1, .result_ty = .float },
+        });
     }
 
     fn genBinaryExpr(anl: *Analyzer, node: Node.Index) !Inst.Index {

@@ -100,6 +100,11 @@ pub const Node = struct {
         /// Rhs is chunk (block)
         function_defn,
 
+        /// Main token is undefined
+        /// Lhs is identifier
+        /// Rhs is argument list
+        function_call,
+
         cond_value,
         expression_list,
         unary_expression,

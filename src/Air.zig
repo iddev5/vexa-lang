@@ -57,6 +57,10 @@ pub const Inst = union(enum) {
         cond: Index,
         block: Index,
     },
+    call: struct {
+        index: u16,
+        result_ty: ValueType,
+    },
     br: void,
     block: Block,
     block_do: Index,
