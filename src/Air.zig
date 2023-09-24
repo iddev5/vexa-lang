@@ -9,11 +9,31 @@ globals: []const ValueType,
 locals: []const ValueType,
 main_fn_type: Inst.Index,
 
-pub const ValueType = enum {
+pub const ValueType = union(enum) {
     void,
     bool,
     float,
-    func,
+    func: Inst.FunctionType,
+
+    pub fn eql(ty: ValueType, other: ValueType) bool {
+        if (std.meta.activeTag(ty) != std.meta.activeTag(other))
+            return false;
+
+        return switch (ty) {
+            .func => blk: {
+                if (ty.func.params.len != other.func.params.len)
+                    break :blk false;
+
+                for (ty.func.params, 0..) |param, i| {
+                    if (!param.eql(other.func.params[i]))
+                        break :blk false;
+                }
+
+                break :blk true;
+            },
+            else => true,
+        };
+    }
 };
 
 pub fn deinit(air: *Air) void {

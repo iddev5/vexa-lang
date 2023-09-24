@@ -297,7 +297,7 @@ const Analyzer = struct {
         };
 
         const val_ty = anl.getType(value);
-        if (symbol.ty != val_ty) {
+        if (!symbol.ty.eql(val_ty)) {
             const main_token = anl.tree.nodes.items(.main_token)[value_node];
             try anl.emitError(locs[main_token], .expected_ty, .{ @tagName(symbol.ty), @tagName(val_ty) });
         }
@@ -369,7 +369,9 @@ const Analyzer = struct {
             .nop => .void,
             .float => .float,
             .bool => .bool,
-            .func => .func,
+            .func => |func| Air.ValueType{
+                .func = anl.instructions.items[func.fn_type].func_type,
+            },
             inline else => |field| {
                 switch (@typeInfo(@TypeOf(field))) {
                     .Struct => if (@hasField(@TypeOf(field), "result_ty")) {
@@ -526,7 +528,7 @@ const Analyzer = struct {
             => valid_op = lhs_type == .float and rhs_type == .float,
             .equal_equal,
             .not_equal,
-            => valid_op = lhs_type == rhs_type, // Applicable on all values of same type
+            => valid_op = lhs_type.eql(rhs_type), // Applicable on all values of same type
             else => unreachable,
         }
 
