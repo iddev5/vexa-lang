@@ -41,17 +41,17 @@ pub fn main() !void {
         // \\        m = false
         // \\    end
         // \\end
-        \\m := 34
-        \\n := false
+        // \\m := 34
+        // \\n := false
         \\function abc(m: float) float
         // \\    function def(n: float) float
         // \\        return n
         // \\    end
         \\    m = 10
-        \\    k := n
+        \\    k := false
         \\    return 0
         \\end
-        \\m = abc(10)
+        \\m := abc(10 + 20 * 30)
     ;
 
     var diag: Diagnostics = .{ .allocator = allocator, .source = source };

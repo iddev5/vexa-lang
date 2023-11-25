@@ -427,6 +427,12 @@ fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
 
 fn emitCall(gen: *WasmGen, writer: anytype, inst: usize) !void {
     const call = gen.ir.instructions[inst].call;
+
+    var inst_index: usize = call.args_idx;
+    while (inst_index < call.args_idx + call.args_len) : (inst_index += 1) {
+        try gen.emitExpr(writer, inst_index);
+    }
+
     try gen.emitOpcode(writer, .call);
     try gen.emitUnsigned(writer, call.index);
 }

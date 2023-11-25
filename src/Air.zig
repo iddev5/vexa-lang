@@ -80,6 +80,8 @@ pub const Inst = union(enum) {
     call: struct {
         index: u16,
         result_ty: ValueType,
+        args_idx: u32,
+        args_len: u32,
     },
     br: void,
     block: Block,

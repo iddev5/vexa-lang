@@ -492,17 +492,28 @@ const Analyzer = struct {
         };
         _ = symbol;
 
+        var args_idx: u32 = undefined;
+        var args_len: u32 = 0;
+
         if (args.tag == .expression_list) {
-            var i = args.lhs;
+            args_idx = try anl.genExpression(anl.tree.extras[args.lhs]);
+            var i = args.lhs + 1;
             while (i < args.rhs) : (i += 1) {
                 _ = try anl.genExpression(anl.tree.extras[i]);
             }
+            args_len = @intCast(anl.instructions.items.len - args_idx);
         } else {
-            _ = try anl.genExpression(node_val.rhs);
+            args_idx = try anl.genExpression(node_val.rhs);
+            args_len = 1;
         }
 
         return try anl.addInst(.{
-            .call = .{ .index = 1, .result_ty = .float },
+            .call = .{
+                .index = 1,
+                .result_ty = .float,
+                .args_idx = args_idx,
+                .args_len = args_len,
+            },
         });
     }
 
