@@ -276,7 +276,16 @@ const Analyzer = struct {
 
         try scope.types.append(anl.allocator, value_ty);
         const index = @as(u16, @intCast(scope.types.items.len - anl.current_func.params.len)) - 1;
-        anl.current_scope.?.locals.putAssumeCapacity(slice, index);
+
+        const inst = anl.instructions.items[value];
+        if (std.meta.activeTag(inst) == .func) {
+            // For functions, get the index from the actual function instruction
+            anl.current_scope.?.locals.putAssumeCapacity(slice, inst.func.id);
+        } else if (value_ty == .func) {
+            // For identifiers pointing to function, we need to get the
+            // index held by the identifier instruction
+            anl.current_scope.?.locals.putAssumeCapacity(slice, inst.ident.index);
+        } else anl.current_scope.?.locals.putAssumeCapacity(slice, index);
         const payload: Air.Inst.SetValue = .{ .index = index, .value = value };
 
         if (scope.ty == .global)
@@ -362,7 +371,7 @@ const Analyzer = struct {
         } });
     }
 
-    fn getType(anl: *Analyzer, node: Node.Index) Air.ValueType {
+    fn getType(anl: *Analyzer, node: Inst.Index) Air.ValueType {
         const inst = anl.instructions.items[node];
         return switch (inst) {
             .nop => .void,
@@ -491,7 +500,6 @@ const Analyzer = struct {
             // TODO: error
             return error.AnalysisFailed;
         };
-        _ = symbol;
 
         var args_idx: u32 = undefined;
         var args_len: u32 = 0;
@@ -510,7 +518,8 @@ const Analyzer = struct {
 
         return try anl.addInst(.{
             .call = .{
-                .index = 1,
+                .index = symbol.id,
+                // TODO: correct return type
                 .result_ty = .float,
                 .args_idx = args_idx,
                 .args_len = args_len,
