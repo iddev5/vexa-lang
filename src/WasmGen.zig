@@ -319,7 +319,7 @@ fn emitGlobal(gen: *WasmGen, writer: anytype, inst: usize) !void {
 }
 
 fn emitRet(gen: *WasmGen, writer: anytype, inst: usize) !void {
-    try gen.emitExpr(writer, gen.ir.instructions[inst].ret.value);
+    try gen.emitExpr(writer, gen.ir.instructions[inst].ret);
     try gen.emitOpcode(writer, .ret);
 }
 

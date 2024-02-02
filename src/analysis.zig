@@ -324,12 +324,17 @@ const Analyzer = struct {
         const lhs = anl.tree.nodes.get(lhs_idx);
 
         const value_inst = try anl.genExpression(lhs_idx);
+        const value_ty = anl.getType(value_inst);
+
+        if (!value_ty.eql(anl.current_func.result[0])) {
+            const locs = anl.tree.tokens.items(.loc);
+            const main_token = anl.tree.nodes.items(.main_token)[lhs_idx];
+            try anl.emitError(locs[main_token], .expected_ty, .{ @tagName(anl.current_func.result[0]), @tagName(value_ty) });
+        }
+
         return switch (lhs.tag) {
             .expression_list => unreachable, // TODO: not supported right now
-            else => try anl.addInst(.{ .ret = .{
-                .result_ty = anl.getType(value_inst),
-                .value = value_inst,
-            } }),
+            else => try anl.addInst(.{ .ret = value_inst }),
         };
     }
 
