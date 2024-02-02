@@ -165,6 +165,7 @@ pub fn emit(gen: *WasmGen, w: anytype) !Module {
 
     // Entry point: implicit main function
     try gen.emitFunc(.{
+        .id = 0,
         .fn_type = gen.ir.main_fn_type,
         .start_inst = gen.ir.start_inst,
         .inst_len = @intCast(gen.ir.instructions.len - gen.ir.start_inst),
@@ -421,6 +422,10 @@ fn emitExpr(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
         .greater_equal,
         => |info| try gen.emitBinOp(writer, inst, info),
         .negate => |info| try gen.emitUnOp(writer, inst, info),
+        .func => |info| {
+            try gen.emitOpcode(writer, .i32_const);
+            try gen.emitUnsigned(writer, info.id);
+        },
         else => unreachable,
     }
 }

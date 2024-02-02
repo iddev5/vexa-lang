@@ -112,6 +112,7 @@ pub const Inst = union(enum) {
     };
 
     pub const Function = struct {
+        id: u32,
         fn_type: Inst.Index,
         start_inst: u32,
         inst_len: u32,

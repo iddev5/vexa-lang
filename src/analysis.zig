@@ -93,6 +93,7 @@ const Analyzer = struct {
     current_scope: ?*Scope = null,
     global_scope: *Scope,
     current_func: Air.Inst.FunctionType,
+    func_count: u32 = 1,
 
     const Error = std.mem.Allocator.Error || error{AnalysisFailed};
 
@@ -272,8 +273,6 @@ const Analyzer = struct {
 
         const value = try anl.genExpression(value_node);
         const value_ty = anl.getType(value);
-        if (value_ty == .func)
-            return value;
 
         try scope.types.append(anl.allocator, value_ty);
         const index = @as(u16, @intCast(scope.types.items.len - anl.current_func.params.len)) - 1;
@@ -456,8 +455,10 @@ const Analyzer = struct {
         block_inst.inst_len = @intCast(anl.instructions.items.len - start_inst);
 
         anl.instructions.items[block].block = block_inst;
+        anl.func_count += 1;
 
         return try anl.addInst(.{ .func = .{
+            .id = anl.func_count - 1,
             .fn_type = fn_type_node,
             .start_inst = block_inst.start_inst,
             .inst_len = block_inst.inst_len,
