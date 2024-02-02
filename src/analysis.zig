@@ -59,6 +59,7 @@ const Scope = struct {
     ty: Type,
     parent: ?*Scope,
     locals: std.StringArrayHashMapUnmanaged(usize) = .{},
+    // Only used when ty == .func or .global
     types: std.ArrayListUnmanaged(Air.ValueType) = .{},
 
     const Type = enum { global, func, other };
@@ -519,8 +520,10 @@ const Analyzer = struct {
         return try anl.addInst(.{
             .call = .{
                 .index = symbol.id,
-                // TODO: correct return type
-                .result_ty = .float,
+                // TODO: support multiple return values, in this case we need
+                // tuple/list support as the function with more than one returns
+                // will actually return a tuple which the user may break down
+                .result_ty = symbol.ty.func.result[0],
                 .args_idx = args_idx,
                 .args_len = args_len,
             },

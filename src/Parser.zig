@@ -364,7 +364,7 @@ fn parsePrimaryExpr(parser: *Parser) Error!Node.Index {
     switch (tags[parser.tok_index]) {
         .l_paren => return try parser.addNode(.{
             .tag = .function_call,
-            .main_token = undefined,
+            .main_token = parser.nodes.items(.main_token)[primary],
             .lhs = primary,
             .rhs = try parser.parseArguments(),
         }),
