@@ -523,6 +523,7 @@ const Analyzer = struct {
             return error.AnalysisFailed;
         };
 
+        // Process only if symbol is a function
         if (std.meta.activeTag(symbol.ty) != .func) {
             const loc = anl.tree.tokens.items(.loc)[main_tokens[node_val.lhs]];
             try anl.emitError(loc, .not_func, .{ident});
@@ -542,6 +543,30 @@ const Analyzer = struct {
         } else {
             args_idx = try anl.genExpression(node_val.rhs);
             args_len = 1;
+        }
+
+        // Check number of arguments
+        if (symbol.ty.func.params.len != args_len) {
+            const loc = anl.tree.tokens.items(.loc)[main_tokens[node_val.lhs]];
+            try anl.emitError(loc, .args_count, .{ symbol.ty.func.params.len, args_len });
+            return error.AnalysisFailed;
+        }
+
+        // Check the type of arguments
+        var i: u32 = 0;
+        while (i < args_len) : (i += 1) {
+            const arg_type = anl.getType(args_idx + i);
+            const param_type = symbol.ty.func.params[i];
+
+            if (std.meta.activeTag(param_type) != std.meta.activeTag(arg_type)) {
+                const locs = anl.tree.tokens.items(.loc);
+                const loc = if (args.tag == .expression_list)
+                    locs[main_tokens[anl.tree.extras[args.lhs + i]]]
+                else
+                    locs[main_tokens[node_val.rhs]];
+                try anl.emitError(loc, .expected_ty, .{ @tagName(param_type), @tagName(arg_type) });
+                return error.AnalysisFailed;
+            }
         }
 
         return try anl.addInst(.{
