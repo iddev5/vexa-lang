@@ -51,12 +51,12 @@ pub fn main() !void {
         \\    k := false
         \\    return 0
         \\end
-        \\function another(kj: float) float
+        \\function another(kj: float, ij: bool, lm: float) float
         \\    return 10
         \\end
         \\m = abc(10 + 20 * 30)
         \\f := another
-        \\x := f(10)
+        \\x := f(10, false, 30)
     ;
 
     var diag: Diagnostics = .{ .allocator = allocator, .source = source };

@@ -488,6 +488,32 @@ test "function" {
         \\    return 20
         \\end
     );
+
+    try testParser(
+        \\chunk
+        \\  declaration
+        \\    identifier
+        \\    function_defn
+        \\      function_type
+        \\        expression_list
+        \\          function_param
+        \\            identifier
+        \\            identifier
+        \\          function_param
+        \\            identifier
+        \\            identifier
+        \\          function_param
+        \\            identifier
+        \\            identifier
+        \\        identifier
+        \\      chunk
+        \\        break_statement
+        \\
+    ,
+        \\function hello2(i: float, j: bool, k: float) float
+        \\    break
+        \\end
+    );
 }
 
 test "struct" {

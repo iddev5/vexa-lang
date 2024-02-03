@@ -427,6 +427,8 @@ const Analyzer = struct {
 
         const type_val = anl.tree.nodes.get(node_val.lhs);
         const main_tokens = anl.tree.nodes.items(.main_token);
+        const lhss = anl.tree.nodes.items(.lhs);
+        const rhss = anl.tree.nodes.items(.rhs);
         const tokens = anl.tree.tokens;
 
         // Process result type
@@ -437,11 +439,24 @@ const Analyzer = struct {
 
         // Process param name and type
         const params = anl.tree.nodes.get(type_val.lhs);
-        const param_name = tokens.get(main_tokens[params.lhs]).slice(anl.tree.source);
-        const param_type = tokens.get(main_tokens[params.rhs]).slice(anl.tree.source);
+        if (params.tag == .expression_list) {
+            var i = params.lhs;
+            while (i < params.rhs) : (i += 1) {
+                const param = anl.tree.extras[i];
+                const param_name = tokens.get(main_tokens[lhss[param]]).slice(anl.tree.source);
+                const param_type = tokens.get(main_tokens[rhss[param]]).slice(anl.tree.source);
 
-        try scope.types.append(anl.allocator, builtin_types.get(param_type) orelse unreachable);
-        try scope.locals.putNoClobber(anl.allocator, param_name, scope.types.items.len - num_results - 1);
+                try scope.types.append(anl.allocator, builtin_types.get(param_type) orelse unreachable);
+                try scope.locals.putNoClobber(anl.allocator, param_name, scope.types.items.len - num_results - 1);
+            }
+        } else {
+            const param_name = tokens.get(main_tokens[params.lhs]).slice(anl.tree.source);
+            const param_type = tokens.get(main_tokens[params.rhs]).slice(anl.tree.source);
+
+            try scope.types.append(anl.allocator, builtin_types.get(param_type) orelse unreachable);
+            try scope.locals.putNoClobber(anl.allocator, param_name, scope.types.items.len - num_results - 1);
+        }
+
         const num_params_and_res = scope.types.items.len;
 
         // Create the function type

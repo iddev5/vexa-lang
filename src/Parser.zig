@@ -221,28 +221,31 @@ fn parseFunction(parser: *Parser) !Node.Index {
     });
 }
 
-fn parseFunctionType(parser: *Parser) !Node.Index {
-    try parser.expectToken(.l_paren);
+const parseFunctionParamOrList = MakeExprOrList(Parser.parseFunctionParam, .comma);
 
+fn parseFunctionParam(parser: *Parser) !Node.Index {
     const ident = try parser.expectIdent();
     try parser.expectToken(.colon);
     const ty = try parser.parseType();
 
-    // TODO: param list
-    const param = try parser.addNode(.{
+    return try parser.addNode(.{
         .tag = .function_param,
         .main_token = undefined,
         .lhs = ident,
         .rhs = ty,
     });
+}
 
+fn parseFunctionType(parser: *Parser) !Node.Index {
+    try parser.expectToken(.l_paren);
+    const params = try parser.parseFunctionParamOrList();
     try parser.expectToken(.r_paren);
 
     const return_type = try parser.parseType();
     return try parser.addNode(.{
         .tag = .function_type,
         .main_token = undefined,
-        .lhs = param,
+        .lhs = params,
         .rhs = return_type,
     });
 }
@@ -335,7 +338,7 @@ fn parseExprOrStmt(parser: *Parser) !Node.Index {
     return expr;
 }
 
-fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Error!Node.Index {
+fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index, comptime sep: Token.Tag) fn (*Parser) Error!Node.Index {
     return struct {
         fn f(parser: *Parser) !Node.Index {
             const tags = parser.tokens.items(.tag);
@@ -348,7 +351,7 @@ fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Err
             try expr_list.append(parser.allocator, first_expr);
 
             var i: u32 = 1;
-            while (tags[parser.tok_index] == .comma) : (i += 1) {
+            while (tags[parser.tok_index] == sep) : (i += 1) {
                 parser.tok_index += 1;
                 const expr = try func(parser);
                 try expr_list.append(parser.allocator, expr);
@@ -370,8 +373,8 @@ fn MakeExprOrList(comptime func: fn (*Parser) Error!Node.Index) fn (*Parser) Err
     }.f;
 }
 
-const parsePrimaryOrList = MakeExprOrList(Parser.parsePrimaryExpr);
-const parseExprOrList = MakeExprOrList(Parser.parseExpr);
+const parsePrimaryOrList = MakeExprOrList(Parser.parsePrimaryExpr, .comma);
+const parseExprOrList = MakeExprOrList(Parser.parseExpr, .comma);
 
 inline fn check(parser: *Parser, expr: Node.Index) !Node.Index {
     const tags = parser.tokens.items(.tag);
