@@ -159,6 +159,9 @@ const Analyzer = struct {
             .if_statement => return try anl.genIfStat(node),
             .while_statement => return try anl.genWhileStat(node),
             .break_statement => return try anl.addInst(.{ .br = {} }),
+            // TODO: error if the function is returning values i.e
+            // the user is discarding values implicitly
+            .function_call => return try anl.genCall(node),
             else => {
                 const main_token = anl.tree.nodes.items(.main_token)[node];
                 try anl.emitError(anl.tree.tokens.items(.loc)[main_token], .invalid_stmt, .{});

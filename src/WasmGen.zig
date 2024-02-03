@@ -299,7 +299,7 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
             try gen.emitUnsigned(writer, @as(u32, 1));
         },
         .block_do => |block| try gen.emitBlock(writer, gen.ir.instructions[block].block),
-
+        .call => try gen.emitCall(writer, inst),
         else => {},
     }
 }
