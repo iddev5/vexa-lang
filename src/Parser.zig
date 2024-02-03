@@ -101,6 +101,7 @@ fn parseStatement(parser: *Parser) !Node.Index {
         .keyword_return => return try parser.parseRetStatement(),
         .keyword_while => return try parser.parseWhileStatement(),
         .keyword_function => return try parser.parseFunction(),
+        .keyword_struct => return try parser.parseStruct(),
         .keyword_for => unreachable,
         .keyword_break => {
             parser.tok_index += 1;
@@ -256,6 +257,35 @@ fn parseFunctionDefn(parser: *Parser) !Node.Index {
         .main_token = undefined,
         .lhs = fn_type,
         .rhs = body,
+    });
+}
+
+fn parseStruct(parser: *Parser) !Node.Index {
+    // Ignore the 'struct' keyword
+    parser.tok_index += 1;
+
+    const main_token = parser.tok_index;
+    const symbol = try parser.parseIdent();
+
+    const ident = try parser.expectIdent();
+    try parser.expectToken(.colon);
+    const ty = try parser.parseType();
+
+    // TODO: member list i.e multiple members
+    const member = try parser.addNode(.{
+        .tag = .struct_member,
+        .main_token = undefined,
+        .lhs = ident,
+        .rhs = ty,
+    });
+
+    try parser.expectToken(.keyword_end);
+
+    return try parser.addNode(.{
+        .tag = .structure,
+        .main_token = main_token,
+        .lhs = symbol,
+        .rhs = member,
     });
 }
 

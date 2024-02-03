@@ -105,6 +105,15 @@ pub const Node = struct {
         /// Rhs is argument list
         function_call,
 
+        /// Main token is identifier node
+        /// Lhs is identifier
+        /// Rhs is structure member
+        structure,
+
+        /// Same as function_param
+        /// TODO: maybe merge with function_param
+        struct_member,
+
         cond_value,
         expression_list,
         unary_expression,
@@ -477,6 +486,22 @@ test "function" {
         \\        return 10
         \\    end
         \\    return 20
+        \\end
+    );
+}
+
+test "struct" {
+    try testParser(
+        \\chunk
+        \\  structure
+        \\    identifier
+        \\    struct_member
+        \\      identifier
+        \\      identifier
+        \\
+    ,
+        \\struct Abc
+        \\    id: float
         \\end
     );
 }
