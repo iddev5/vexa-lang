@@ -518,9 +518,16 @@ const Analyzer = struct {
         const args = anl.tree.nodes.get(node_val.rhs);
 
         const symbol = anl.getSymbol(anl.current_scope.?, ident) orelse {
-            // TODO: error
+            const loc = anl.tree.tokens.items(.loc)[main_tokens[node_val.lhs]];
+            try anl.emitError(loc, .undecl_ident, .{ident});
             return error.AnalysisFailed;
         };
+
+        if (std.meta.activeTag(symbol.ty) != .func) {
+            const loc = anl.tree.tokens.items(.loc)[main_tokens[node_val.lhs]];
+            try anl.emitError(loc, .not_func, .{ident});
+            return error.AnalysisFailed;
+        }
 
         var args_idx: u32 = undefined;
         var args_len: u32 = 0;
