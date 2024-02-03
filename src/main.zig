@@ -51,8 +51,8 @@ pub fn main() !void {
         \\    k := false
         \\    return 0
         \\end
-        \\function another(kj: float, ij: bool, lm: float) float
-        \\    return 10
+        \\function another(kj: float, ij: bool, lm: float) float, bool
+        \\    return 10, true
         \\end
         \\m = abc(10 + 20 * 30)
         \\f := another

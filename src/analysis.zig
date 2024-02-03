@@ -320,11 +320,11 @@ const Analyzer = struct {
     }
 
     fn genReturn(anl: *Analyzer, node: Node.Index) !Inst.Index {
+        // TODO: check value_len & type == func.params.len & type
         const lhs_idx = anl.tree.nodes.items(.lhs)[node];
-        const lhs = anl.tree.nodes.get(lhs_idx);
 
-        const value_inst = try anl.genExpression(lhs_idx);
-        const value_ty = anl.getType(value_inst);
+        const value_list = try anl.genExpressionList(lhs_idx);
+        const value_ty = anl.getType(value_list.idx);
 
         if (!value_ty.eql(anl.current_func.result[0])) {
             const locs = anl.tree.tokens.items(.loc);
@@ -332,10 +332,9 @@ const Analyzer = struct {
             try anl.emitError(locs[main_token], .expected_ty, .{ @tagName(anl.current_func.result[0]), @tagName(value_ty) });
         }
 
-        return switch (lhs.tag) {
-            .expression_list => unreachable, // TODO: not supported right now
-            else => try anl.addInst(.{ .ret = value_inst }),
-        };
+        return try anl.addInst(.{
+            .ret = .{ .val_idx = value_list.idx, .val_len = value_list.len },
+        });
     }
 
     fn genDoStat(anl: *Analyzer, node: Node.Index) Error!Inst.Index {
@@ -432,9 +431,20 @@ const Analyzer = struct {
         const tokens = anl.tree.tokens;
 
         // Process result type
-        const result = tokens.get(main_tokens[type_val.rhs]).slice(anl.tree.source);
-        const result_ty = builtin_types.get(result) orelse unreachable;
-        try scope.types.append(anl.allocator, result_ty);
+        const results = anl.tree.nodes.get(type_val.rhs);
+        if (results.tag == .expression_list) {
+            var i = results.lhs;
+            while (i < results.rhs) : (i += 1) {
+                const result = tokens.get(main_tokens[anl.tree.extras[i]]).slice(anl.tree.source);
+                const result_ty = builtin_types.get(result) orelse unreachable;
+                try scope.types.append(anl.allocator, result_ty);
+            }
+        } else {
+            const result = tokens.get(main_tokens[type_val.rhs]).slice(anl.tree.source);
+            const result_ty = builtin_types.get(result) orelse unreachable;
+            try scope.types.append(anl.allocator, result_ty);
+        }
+
         const num_results = scope.types.items.len;
 
         // Process param name and type
@@ -509,6 +519,32 @@ const Analyzer = struct {
             .params = &.{},
             .result = &.{},
         } });
+    }
+
+    const InstList = struct {
+        idx: u32,
+        len: u32,
+    };
+
+    fn genExpressionList(anl: *Analyzer, node: Node.Index) !InstList {
+        const node_val = anl.tree.nodes.get(node);
+
+        var idx: u32 = undefined;
+        var len: u32 = 0;
+
+        if (node_val.tag == .expression_list) {
+            idx = try anl.genExpression(anl.tree.extras[node_val.lhs]);
+            var i = node_val.lhs + 1;
+            while (i < node_val.rhs) : (i += 1) {
+                _ = try anl.genExpression(anl.tree.extras[i]);
+            }
+            len = @intCast(anl.instructions.items.len - idx);
+        } else {
+            idx = try anl.genExpression(node);
+            len = 1;
+        }
+
+        return .{ .idx = idx, .len = len };
     }
 
     fn genCall(anl: *Analyzer, node: Node.Index) !Inst.Index {

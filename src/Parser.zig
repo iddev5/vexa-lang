@@ -241,12 +241,13 @@ fn parseFunctionType(parser: *Parser) !Node.Index {
     const params = try parser.parseFunctionParamOrList();
     try parser.expectToken(.r_paren);
 
-    const return_type = try parser.parseType();
+    const results = try MakeExprOrList(Parser.parseType, .comma)(parser);
+
     return try parser.addNode(.{
         .tag = .function_type,
         .main_token = undefined,
         .lhs = params,
-        .rhs = return_type,
+        .rhs = results,
     });
 }
 

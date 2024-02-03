@@ -62,7 +62,10 @@ pub const Inst = union(enum) {
     negate: UnaryOp,
     local_set: SetValue,
     global_set: SetValue,
-    ret: Index,
+    ret: struct {
+        val_idx: u32,
+        val_len: u32,
+    },
     func_type: FunctionType,
     func: Function,
     cond: struct {
