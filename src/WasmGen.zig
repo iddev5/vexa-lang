@@ -218,7 +218,7 @@ fn emitFunc(gen: *WasmGen, func: Air.Inst.Function) !void {
 
     const func_type = gen.ir.instructions[func.fn_type].func_type;
 
-    var func_code_writer = func_code.writer();
+    const func_code_writer = func_code.writer();
 
     try gen.emitUnsigned(func_code_writer, @as(u32, @intCast(func.locals.len)));
     for (func.locals) |local| {
@@ -455,8 +455,8 @@ fn emitFloat(gen: *WasmGen, writer: anytype, val: f64) !void {
     try gen.emitOpcode(writer, .f64_const);
 
     const float = @as(u64, @bitCast(val));
-    try writer.writeIntLittle(u32, @as(u32, @truncate(float)));
-    try writer.writeIntLittle(u32, @as(u32, @truncate(float >> 32)));
+    try writer.writeInt(u32, @as(u32, @truncate(float)), .little);
+    try writer.writeInt(u32, @as(u32, @truncate(float >> 32)), .little);
 }
 
 fn emitUnsigned(gen: *WasmGen, writer: anytype, val: anytype) !void {

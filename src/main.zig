@@ -55,8 +55,8 @@ pub fn main() !void {
         \\    return 10, true
         \\end
         \\m = abc(10 + 20 * 30)
-        \\f := another
-        \\x := f(10, false, 30)
+        // \\f := another
+        // \\x := f(10, false, 30)
     ;
 
     var diag: Diagnostics = .{ .allocator = allocator, .source = source };

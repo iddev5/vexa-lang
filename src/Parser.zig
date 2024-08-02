@@ -52,7 +52,7 @@ fn addNode(parser: *Parser, node: Node) !Node.Index {
 }
 
 fn parseChunk(parser: *Parser) Error!Node.Index {
-    var chunk = try parser.addNode(.{
+    const chunk = try parser.addNode(.{
         .tag = .chunk,
         .main_token = 0,
     });

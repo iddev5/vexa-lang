@@ -65,7 +65,7 @@ const Scope = struct {
     const Type = enum { global, func, other };
 
     pub fn init(allocator: std.mem.Allocator, ty: Type, parent: ?*Scope) !*Scope {
-        var scope = try allocator.create(Scope);
+        const scope = try allocator.create(Scope);
         scope.* = .{ .ty = ty, .parent = parent };
         return scope;
     }
@@ -415,7 +415,7 @@ const Analyzer = struct {
         unreachable;
     }
 
-    const builtin_types = std.ComptimeStringMap(Air.ValueType, .{
+    const builtin_types = std.StaticStringMap(Air.ValueType).initComptime(.{
         .{ "float", .float },
         .{ "bool", .bool },
         .{ "void", .void },

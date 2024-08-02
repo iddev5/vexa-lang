@@ -147,7 +147,7 @@ pub const Token = struct {
         }
     };
 
-    pub const keywords = std.ComptimeStringMap(Tag, .{
+    pub const keywords = std.StaticStringMap(Tag).initComptime(.{
         .{ "and", .keyword_and },
         .{ "break", .keyword_break },
         .{ "do", .keyword_do },
