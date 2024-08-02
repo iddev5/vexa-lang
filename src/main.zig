@@ -9,55 +9,16 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
 
-    const source =
-        // \\hi, i := -1 + 2 * 3 / 4, true == true
-        // \\if true == true then
-        // \\    i, hi = true == false, 67 / 22 + hi
-        // \\end
-        // \\if false then
-        // \\    return false
-        // \\elseif true then
-        // \\    return true
-        // \\else
-        // \\    m := 12
-        // \\    if true then
-        // \\        m = m * 2
-        // \\        return true
-        // \\    else
-        // \\        return false
-        // \\    end
-        // \\    return 10
-        // \\end
-        // \\do
-        // \\    m := true
-        // \\end
-        // \\return 12
-        // \\while true do
-        // \\    if i == false then
-        // \\        break
-        // \\    end
-        // \\    m := true
-        // \\    do
-        // \\        m = false
-        // \\    end
-        // \\end
-        \\m := 34
-        // \\n := false
-        \\function abc(m: float) float
-        // \\    function def(n: float) float
-        // \\        return n
-        // \\    end
-        \\    m = 10
-        \\    k := false
-        \\    return 0
-        \\end
-        \\function another(kj: float, ij: bool, lm: float) float, bool
-        \\    return 10, true
-        \\end
-        \\m = abc(10 + 20 * 30)
-        // \\f := another
-        // \\x := f(10, false, 30)
-    ;
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len < 2) {
+        try stderr.writeAll("File input not provided.\n");
+        std.process.exit(1);
+    }
+
+    const source = try std.fs.cwd().readFileAllocOptions(allocator, args[1], std.math.maxInt(usize), null, @alignOf(u8), 0);
+    defer allocator.free(source);
 
     var diag: Diagnostics = .{ .allocator = allocator, .source = source };
     defer diag.deinit();
