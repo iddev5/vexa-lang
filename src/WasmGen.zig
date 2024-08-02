@@ -288,7 +288,8 @@ fn emitBlock(gen: *WasmGen, writer: anytype, block: Air.Inst.Block) !void {
 }
 
 fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
-    switch (gen.ir.instructions[inst]) {
+    const insts = gen.ir.instructions;
+    switch (insts[inst]) {
         .local_set => try gen.emitLocal(writer, inst),
         .global_set => try gen.emitGlobal(writer, inst),
         .ret => try gen.emitRet(writer, inst),
@@ -299,7 +300,10 @@ fn emitTopLevel(gen: *WasmGen, writer: anytype, inst: usize) anyerror!void {
             try gen.emitUnsigned(writer, @as(u32, 1));
         },
         .block_do => |block| try gen.emitBlock(writer, gen.ir.instructions[block].block),
-        .call => try gen.emitCall(writer, inst),
+        // Make sure that the call statement is not part of an expression i.e not
+        // associated with a local_set or global_set
+        .call => if (inst + 1 < insts.len and !(insts[inst + 1] == .local_set or insts[inst + 1] == .global_set))
+            try gen.emitCall(writer, inst),
         else => {},
     }
 }
