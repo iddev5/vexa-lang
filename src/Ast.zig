@@ -450,7 +450,7 @@ test "function" {
         \\        break_statement
         \\
     ,
-        \\function hello(i: float) float
+        \\def hello(i: float) float
         \\    break
         \\end
     );
@@ -481,8 +481,8 @@ test "function" {
         \\          literal
         \\
     ,
-        \\function abc(i: float) float
-        \\    function def(j: float) float
+        \\def abc(i: float) float
+        \\    def def(j: float) float
         \\        return 10
         \\    end
         \\    return 20
@@ -510,7 +510,7 @@ test "function" {
         \\        break_statement
         \\
     ,
-        \\function hello2(i: float, j: bool, k: float) float
+        \\def hello2(i: float, j: bool, k: float) float
         \\    break
         \\end
     );

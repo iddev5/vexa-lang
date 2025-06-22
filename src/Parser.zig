@@ -99,7 +99,7 @@ fn parseStatement(parser: *Parser) !Node.Index {
         .keyword_if => return try parser.parseIfStatement(),
         .keyword_return => return try parser.parseRetStatement(),
         .keyword_while => return try parser.parseWhileStatement(),
-        .keyword_function => return try parser.parseFunction(),
+        .keyword_def => return try parser.parseFunction(),
         .keyword_struct => return try parser.parseStruct(),
         .keyword_for => unreachable,
         .keyword_break => {
@@ -209,7 +209,7 @@ fn parseWhileStatement(parser: *Parser) !Node.Index {
 }
 
 fn parseFunction(parser: *Parser) !Node.Index {
-    // Ignore the 'function' keyword
+    // Ignore the 'def' keyword
     parser.tok_index += 1;
 
     const main_token = parser.tok_index;
@@ -519,7 +519,7 @@ fn parseSimpleExpr(parser: *Parser) !Node.Index {
                 .main_token = parser.tok_index - 1,
             });
         },
-        .keyword_function => unreachable,
+        .keyword_def => unreachable,
         else => return try parser.parsePrimaryExpr(),
     }
     unreachable;
