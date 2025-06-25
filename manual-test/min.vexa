@@ -1,0 +1,8 @@
+m := 34
+def abc(m: float) float
+    m = 10
+    k := false
+    return 0
+end
+
+m = abc(10 + 20 * 30)

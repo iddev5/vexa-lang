@@ -38,7 +38,7 @@ jobs:
             - name: Build
               run: zig build
             - name: Run demo
-              run: zig build run > output.wasm
+              run: zig build run -- manual-test/min.vexa  > output.wasm
             - name: Show output
               run: wasm2wat --no-check output.wasm
             - name: Show C code
